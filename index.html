@@ -190,6 +190,28 @@
   }
   .link-add-row input:focus{border-color:var(--gold);}
   .link-add-row button{width:auto; padding:10px 16px; white-space:nowrap;}
+
+  /* ---------- Home Page (banner management) ---------- */
+  .home-banner-list{background:#fff; border:1px solid #EEE3CC; border-radius:12px; overflow:hidden; margin-bottom:16px;}
+  .home-banner-row{display:flex; align-items:center; gap:10px; padding:9px 12px; border-bottom:1px solid #F3ECDA;}
+  .home-banner-row:last-child{border-bottom:none;}
+  .home-banner-row .thumb{width:48px; height:48px; border-radius:8px; overflow:hidden; background:#F0EAD9; flex-shrink:0;}
+  .home-banner-row .thumb img{width:100%; height:100%; object-fit:cover; display:block;}
+  .home-banner-row .cat{flex:1; font-size:13px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .home-banner-row-actions{display:flex; align-items:center; gap:4px;}
+
+  .home-add-card{background:#fff; border:1px solid #EEE3CC; border-radius:12px; padding:14px; margin-bottom:16px;}
+  .home-add-card .field{margin-bottom:12px;}
+  .home-add-card label{display:block; font-size:12px; font-weight:600; margin-bottom:5px;}
+  .home-add-card select{
+    width:100%; padding:10px 12px; border:1.5px solid #E6DCCB; border-radius:9px;
+    font-size:14px; font-family:'Work Sans',sans-serif; outline:none; background:#fff;
+  }
+  .home-add-card select:focus{border-color:var(--gold);}
+  .home-add-preview{display:flex; align-items:center; gap:10px; margin-bottom:12px;}
+  .home-add-preview .thumb{width:64px; height:64px; border-radius:8px; overflow:hidden; background:#F0EAD9; flex-shrink:0;}
+  .home-add-preview .thumb img{width:100%; height:100%; object-fit:cover; display:block;}
+  .home-add-preview .placeholder{font-size:11.5px; color:var(--ink-soft);}
 </style>
 </head>
 <body>
@@ -222,6 +244,7 @@
       <div class="tab-btn active" id="tab-scan-btn">📷 Scan &amp; Shoot</div>
       <div class="tab-btn" id="tab-bulk-btn">📁 Existing Photos</div>
       <div class="tab-btn" id="tab-link-btn">🔗 Link Items</div>
+      <div class="tab-btn" id="tab-home-btn">🏠 Home Page</div>
       <div class="tab-btn" id="tab-manage-btn">🗑 Manage</div>
     </div>
 
@@ -315,6 +338,32 @@
       <p class="note">Use this when several identical-looking pieces (same design, different tags) share one photo set. Add each tag in the order you'd like it sold first — the top tag still in stock is the one shown &amp; quoted on the catalogue; once it sells, the next one in the list takes over automatically.</p>
     </div>
 
+    <!-- HOME PAGE TAB (customer catalogue home-screen banners) -->
+    <div class="tab-pane" id="tab-home">
+      <div class="home-banner-list" id="home-banner-list"></div>
+
+      <div class="home-add-card">
+        <div class="field">
+          <label>Banner image</label>
+          <input type="file" id="home-banner-file" accept="image/*">
+        </div>
+        <div class="home-add-preview" id="home-add-preview">
+          <div class="thumb" id="home-add-thumb"></div>
+          <span class="placeholder" id="home-add-placeholder">No image chosen yet</span>
+        </div>
+        <div class="field">
+          <label>Opens this category when tapped</label>
+          <select id="home-category-select">
+            <option value="all">Shop All (full catalogue)</option>
+          </select>
+        </div>
+        <button class="btn" id="home-add-btn">+ Add Banner</button>
+        <p class="link-status" id="home-add-status"></p>
+      </div>
+
+      <p class="note">These are the attractive lead images customers see first when they open the catalogue. Tapping one takes them straight into whichever category you pick above. Categories are pulled from what's actually live in the catalogue right now, so upload &amp; link your stock first if a category you expect isn't listed yet.</p>
+    </div>
+
     <!-- MANAGE TAB (delete existing catalogue photos) -->
     <div class="tab-pane" id="tab-manage">
       <div class="manage-search">
@@ -375,16 +424,20 @@ onAuthStateChanged(auth, user => {
 document.getElementById('tab-scan-btn').addEventListener('click', () => switchTab('scan'));
 document.getElementById('tab-bulk-btn').addEventListener('click', () => switchTab('bulk'));
 document.getElementById('tab-link-btn').addEventListener('click', () => switchTab('link'));
+document.getElementById('tab-home-btn').addEventListener('click', () => switchTab('home'));
 document.getElementById('tab-manage-btn').addEventListener('click', () => switchTab('manage'));
 function switchTab(name){
   document.getElementById('tab-scan-btn').classList.toggle('active', name==='scan');
   document.getElementById('tab-bulk-btn').classList.toggle('active', name==='bulk');
   document.getElementById('tab-link-btn').classList.toggle('active', name==='link');
+  document.getElementById('tab-home-btn').classList.toggle('active', name==='home');
   document.getElementById('tab-manage-btn').classList.toggle('active', name==='manage');
   document.getElementById('tab-scan').classList.toggle('active', name==='scan');
   document.getElementById('tab-bulk').classList.toggle('active', name==='bulk');
   document.getElementById('tab-link').classList.toggle('active', name==='link');
+  document.getElementById('tab-home').classList.toggle('active', name==='home');
   document.getElementById('tab-manage').classList.toggle('active', name==='manage');
+  if (name === 'home') { loadHomeCategories(); loadHomeBanners(); }
   if (name !== 'scan') resetCapture();
 }
 
@@ -860,6 +913,152 @@ function moveLinkedTag(idx, delta){
   renderLinkList();
   saveLinkedList();
 }
+
+// ---------- Home Page: banner management ----------
+// Categories are derived live from whatever's actually in the catalogue
+// right now (same categoryKey/categoryLabel scheme the catalogue page uses),
+// so the dropdown never lets the shop pick a category that doesn't exist.
+function homeCategoryKey(name){
+  return (name || '').toString().trim().toLowerCase();
+}
+function homeCategoryLabel(key){
+  if (!key || key === 'all') return 'Shop All';
+  return key.replace(/\s+/g, ' ').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+}
+
+async function loadHomeCategories(){
+  const select = document.getElementById('home-category-select');
+  const previousValue = select.value;
+  try {
+    const snap = await get(ref(db, 'catalogue/items'));
+    const items = snap.val() || {};
+    const keys = new Set();
+    Object.keys(items).forEach(bc => {
+      const node = items[bc];
+      if (node && node.available && node.displayName) keys.add(homeCategoryKey(node.displayName));
+    });
+    const sortedKeys = Array.from(keys).sort((a, b) => homeCategoryLabel(a).localeCompare(homeCategoryLabel(b)));
+    select.innerHTML = '<option value="all">Shop All (full catalogue)</option>' +
+      sortedKeys.map(k => `<option value="${k.replace(/"/g,'&quot;')}">${homeCategoryLabel(k)}</option>`).join('');
+    if (sortedKeys.includes(previousValue) || previousValue === 'all') select.value = previousValue;
+  } catch (e) {
+    console.error('[Home] could not load categories', e);
+  }
+}
+
+// Live preview thumbnail as soon as a file is chosen.
+document.getElementById('home-banner-file').addEventListener('change', e => {
+  const file = e.target.files[0];
+  const thumb = document.getElementById('home-add-thumb');
+  const placeholder = document.getElementById('home-add-placeholder');
+  if (!file) { thumb.innerHTML = ''; placeholder.style.display = 'block'; return; }
+  const url = URL.createObjectURL(file);
+  thumb.innerHTML = `<img src="${url}" alt="">`;
+  placeholder.style.display = 'none';
+});
+
+async function loadHomeBanners(){
+  const list = document.getElementById('home-banner-list');
+  try {
+    const snap = await get(ref(db, 'catalogue/homeBanners'));
+    const val = snap.val() || {};
+    const banners = Object.keys(val)
+      .map(id => ({ id, imageUrl: val[id].imageUrl, storagePath: val[id].storagePath, categoryKey: val[id].categoryKey || 'all', order: val[id].order || 0 }))
+      .sort((a, b) => a.order - b.order);
+    renderHomeBannerList(banners);
+  } catch (e) {
+    console.error('[Home] could not load banners', e);
+    list.innerHTML = '';
+  }
+}
+
+function renderHomeBannerList(banners){
+  const list = document.getElementById('home-banner-list');
+  if (!banners.length) {
+    list.innerHTML = '<div class="home-banner-row"><span class="cat" style="color:var(--ink-soft); font-weight:400;">No home page banners yet — add one below.</span></div>';
+    return;
+  }
+  list.innerHTML = banners.map((b, i) => `
+    <div class="home-banner-row" data-idx="${i}">
+      <div class="thumb"><img src="${b.imageUrl}" alt=""></div>
+      <span class="cat">${homeCategoryLabel(b.categoryKey)}</span>
+      <span class="home-banner-row-actions">
+        <button class="link-move-btn" data-dir="up" ${i === 0 ? 'disabled' : ''} title="Move up">↑</button>
+        <button class="link-move-btn" data-dir="down" ${i === banners.length - 1 ? 'disabled' : ''} title="Move down">↓</button>
+        <button class="manage-del-btn" title="Delete this banner">🗑</button>
+      </span>
+    </div>
+  `).join('');
+
+  list.querySelectorAll('.home-banner-row').forEach(row => {
+    const idx = Number(row.dataset.idx);
+    const moveBtns = row.querySelectorAll('.link-move-btn');
+    moveBtns[0].addEventListener('click', () => moveHomeBanner(banners, idx, -1));
+    moveBtns[1].addEventListener('click', () => moveHomeBanner(banners, idx, 1));
+    row.querySelector('.manage-del-btn').addEventListener('click', () => removeHomeBanner(banners[idx]));
+  });
+}
+
+async function moveHomeBanner(banners, idx, delta){
+  const target = idx + delta;
+  if (target < 0 || target >= banners.length) return;
+  const a = banners[idx], b = banners[target];
+  try {
+    await update(ref(db, '/'), {
+      ['catalogue/homeBanners/' + a.id + '/order']: b.order,
+      ['catalogue/homeBanners/' + b.id + '/order']: a.order,
+    });
+    loadHomeBanners();
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+async function removeHomeBanner(banner){
+  if (!confirm('Remove this home page banner? This cannot be undone.')) return;
+  try {
+    if (banner.storagePath) {
+      try { await deleteObject(storageRef(storage, banner.storagePath)); }
+      catch (e) { console.warn('[Home] storage object may already be gone', e); }
+    }
+    await update(ref(db, '/'), { ['catalogue/homeBanners/' + banner.id]: null });
+    loadHomeBanners();
+  } catch (e) {
+    console.error(e);
+    alert('Could not remove — try again.');
+  }
+}
+
+document.getElementById('home-add-btn').addEventListener('click', async () => {
+  const fileInput = document.getElementById('home-banner-file');
+  const file = fileInput.files[0];
+  const statusEl = document.getElementById('home-add-status');
+  const categoryKey = document.getElementById('home-category-select').value;
+  if (!file) { statusEl.textContent = 'Choose an image first.'; return; }
+
+  const btn = document.getElementById('home-add-btn');
+  btn.disabled = true; btn.textContent = 'Uploading…';
+  statusEl.textContent = '';
+  try {
+    const blob = await compressImageFile(file);
+    const bannerId = Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+    const storagePath = 'homeBannerImages/' + bannerId + '.jpg';
+    const sRef = storageRef(storage, storagePath);
+    await uploadBytes(sRef, blob, { contentType: 'image/jpeg' });
+    const url = await getDownloadURL(sRef);
+    await update(ref(db, '/'), {
+      ['catalogue/homeBanners/' + bannerId]: { imageUrl: url, storagePath, categoryKey, order: Date.now() }
+    });
+    fileInput.value = '';
+    document.getElementById('home-add-thumb').innerHTML = '';
+    document.getElementById('home-add-placeholder').style.display = 'block';
+    loadHomeBanners();
+  } catch (e) {
+    console.error(e);
+    statusEl.textContent = 'Upload failed — try again.';
+  }
+  btn.disabled = false; btn.textContent = '+ Add Banner';
+});
 
 // ---------- Manage: view & delete existing catalogue photos for a barcode ----------
 // Handles two data shapes that exist in the DB:
