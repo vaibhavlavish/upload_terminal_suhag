@@ -146,6 +146,50 @@
   }
   .manage-del-btn:active{transform:scale(.95);}
   .manage-del-btn:disabled{opacity:.5;}
+
+  /* ---------- Link Items (attach multiple tags to one photo set) ---------- */
+  .link-search{display:flex; gap:8px; margin-bottom:16px;}
+  .link-search input{
+    flex:1; padding:10px 12px; border:1.5px solid #E6DCCB; border-radius:9px;
+    font-size:14px; font-family:'Work Sans',sans-serif; outline:none; text-transform:uppercase;
+  }
+  .link-search input:focus{border-color:var(--gold);}
+  .link-search button{width:auto; padding:10px 16px; white-space:nowrap;}
+  .link-status{font-size:12.5px; color:var(--ink-soft); text-align:center; margin:10px 0;}
+
+  .link-group{display:none;}
+  .link-group.show{display:block;}
+  .link-preview{display:flex; align-items:center; gap:12px; background:#fff; border:1px solid #EEE3CC; border-radius:12px; padding:10px; margin-bottom:16px;}
+  .link-preview .thumb{width:56px; height:56px; border-radius:8px; overflow:hidden; background:#F0EAD9; flex-shrink:0;}
+  .link-preview .thumb img{width:100%; height:100%; object-fit:cover; display:block;}
+  .link-preview .info{font-size:12.5px; color:var(--ink-soft);}
+  .link-preview .info b{color:var(--ink); font-size:14px;}
+
+  .link-list{background:#fff; border:1px solid #EEE3CC; border-radius:12px; overflow:hidden; margin-bottom:16px;}
+  .link-row{display:flex; align-items:center; gap:10px; padding:10px 12px; border-bottom:1px solid #F3ECDA;}
+  .link-row:last-child{border-bottom:none;}
+  .link-seq{
+    width:22px; height:22px; border-radius:50%; background:var(--oxblood); color:var(--ivory);
+    font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0;
+  }
+  .link-row .barcode{flex:1; font-weight:700; font-size:13.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .link-row .link-first-tag{font-size:10px; font-weight:700; color:var(--ok); text-transform:uppercase; letter-spacing:.3px;}
+  .link-row-actions{display:flex; align-items:center; gap:4px;}
+  .link-move-btn, .link-remove-btn{
+    background:none; border:1px solid #E6DCCB; border-radius:6px; font-size:13px; padding:4px 8px;
+    cursor:pointer; line-height:1; color:var(--ink-soft);
+  }
+  .link-move-btn:disabled{opacity:.3; cursor:default;}
+  .link-remove-btn{color:var(--err); border-color:#EEDADA;}
+  .link-remove-btn:disabled{opacity:.3; cursor:default;}
+
+  .link-add-row{display:flex; gap:8px;}
+  .link-add-row input{
+    flex:1; padding:10px 12px; border:1.5px solid #E6DCCB; border-radius:9px;
+    font-size:14px; font-family:'Work Sans',sans-serif; outline:none; text-transform:uppercase;
+  }
+  .link-add-row input:focus{border-color:var(--gold);}
+  .link-add-row button{width:auto; padding:10px 16px; white-space:nowrap;}
 </style>
 </head>
 <body>
@@ -177,6 +221,7 @@
     <div class="tabs">
       <div class="tab-btn active" id="tab-scan-btn">📷 Scan &amp; Shoot</div>
       <div class="tab-btn" id="tab-bulk-btn">📁 Existing Photos</div>
+      <div class="tab-btn" id="tab-link-btn">🔗 Link Items</div>
       <div class="tab-btn" id="tab-manage-btn">🗑 Manage</div>
     </div>
 
@@ -247,6 +292,29 @@
       <p class="note">Each upload adds a new photo for that barcode — it doesn't replace existing ones.</p>
     </div>
 
+    <!-- LINK ITEMS TAB (attach multiple tags to one photo set) -->
+    <div class="tab-pane" id="tab-link">
+      <div class="link-search">
+        <input type="text" id="link-barcode-input" autocomplete="off" placeholder="Enter the barcode with photos already uploaded">
+        <button class="btn" id="link-load-btn">Load</button>
+      </div>
+      <p class="link-status" id="link-status"></p>
+
+      <div class="link-group" id="link-group">
+        <div class="link-preview">
+          <div class="thumb" id="link-thumb"></div>
+          <div class="info">Linked tags for this photo — <b id="link-photo-barcode"></b><br>Whichever tag is first in stock is the one priced &amp; quoted to customers.</div>
+        </div>
+        <div class="link-list" id="link-list"></div>
+        <div class="link-add-row">
+          <input type="text" id="link-add-input" autocomplete="off" placeholder="Add another tag (e.g. GCH2)">
+          <button class="btn secondary" id="link-add-btn">+ Add Tag</button>
+        </div>
+      </div>
+
+      <p class="note">Use this when several identical-looking pieces (same design, different tags) share one photo set. Add each tag in the order you'd like it sold first — the top tag still in stock is the one shown &amp; quoted on the catalogue; once it sells, the next one in the list takes over automatically.</p>
+    </div>
+
     <!-- MANAGE TAB (delete existing catalogue photos) -->
     <div class="tab-pane" id="tab-manage">
       <div class="manage-search">
@@ -306,13 +374,16 @@ onAuthStateChanged(auth, user => {
 // ---------- Tabs ----------
 document.getElementById('tab-scan-btn').addEventListener('click', () => switchTab('scan'));
 document.getElementById('tab-bulk-btn').addEventListener('click', () => switchTab('bulk'));
+document.getElementById('tab-link-btn').addEventListener('click', () => switchTab('link'));
 document.getElementById('tab-manage-btn').addEventListener('click', () => switchTab('manage'));
 function switchTab(name){
   document.getElementById('tab-scan-btn').classList.toggle('active', name==='scan');
   document.getElementById('tab-bulk-btn').classList.toggle('active', name==='bulk');
+  document.getElementById('tab-link-btn').classList.toggle('active', name==='link');
   document.getElementById('tab-manage-btn').classList.toggle('active', name==='manage');
   document.getElementById('tab-scan').classList.toggle('active', name==='scan');
   document.getElementById('tab-bulk').classList.toggle('active', name==='bulk');
+  document.getElementById('tab-link').classList.toggle('active', name==='link');
   document.getElementById('tab-manage').classList.toggle('active', name==='manage');
   if (name !== 'scan') resetCapture();
 }
@@ -437,10 +508,31 @@ async function uploadForBarcode(barcode, blob){
   return { imageId, storagePath };
 }
 
-function compressCanvasToBlob(canvas){
+// Compresses to a target file-size ceiling rather than a fixed quality
+// number — actual output size depends heavily on the photo's own detail,
+// so this starts high-quality and steps quality down only if needed, aiming
+// for a max of ~450KB (a step up in resolution from before, for sharper
+// zoomed-in detail on the catalogue and Manage-tab thumbnails).
+const TARGET_MAX_BYTES = 450 * 1024; // ~450KB ceiling (~400-500KB target range)
+
+function canvasToBlobAt(canvas, quality){
   return new Promise((resolve, reject) => {
-    canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('Compression failed')), 'image/jpeg', 0.75);
+    canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('Compression failed')), 'image/jpeg', quality);
   });
+}
+
+async function compressCanvasToTarget(canvas){
+  let quality = 0.9;
+  let blob = await canvasToBlobAt(canvas, quality);
+  while (blob.size > TARGET_MAX_BYTES && quality > 0.5) {
+    quality -= 0.08;
+    blob = await canvasToBlobAt(canvas, quality);
+  }
+  return blob;
+}
+
+function compressCanvasToBlob(canvas){
+  return compressCanvasToTarget(canvas);
 }
 
 function resizedCanvasFromVideo(video, maxW){
@@ -573,7 +665,7 @@ async function captureAndUpload(){
   btn.disabled = true; btn.textContent = 'Uploading…';
   try{
     const video = document.getElementById('scan-video');
-    const canvas = resizedCanvasFromVideo(video, 900);
+    const canvas = resizedCanvasFromVideo(video, 1600);
     const blob = await compressCanvasToBlob(canvas);
     const imageRef = await uploadForBarcode(barcode, blob);
     addRecentRow(barcode, true, imageRef);
@@ -619,8 +711,10 @@ function compressImageFile(file){
     const img = new Image();
     const url = URL.createObjectURL(file);
     img.onload = () => {
-      const canvas = resizedCanvasFromImg(img, 900);
-      canvas.toBlob(blob => { URL.revokeObjectURL(url); blob ? resolve(blob) : reject(new Error('Compression failed')); }, 'image/jpeg', 0.75);
+      const canvas = resizedCanvasFromImg(img, 1600);
+      compressCanvasToTarget(canvas)
+        .then(blob => { URL.revokeObjectURL(url); resolve(blob); })
+        .catch(err => { URL.revokeObjectURL(url); reject(err); });
     };
     img.onerror = () => reject(new Error('Could not read image'));
     img.src = url;
@@ -650,6 +744,122 @@ document.getElementById('upload-btn').addEventListener('click', async () => {
   }
   btn.disabled = false; btn.textContent = '⬆ Upload All';
 });
+
+// ---------- Link Items: attach multiple tags to one photo set ----------
+// A catalogue entry's `linkedBarcodes` field is an ordered list of tags that
+// all share this same photo set. Sequence = priority: the Price Checker
+// quotes whichever tag is first in this list AND still in stock, and
+// switches to the next one automatically once that tag sells. Items with no
+// `linkedBarcodes` field behave exactly as before (just their own barcode).
+let currentLinkBarcode = null;
+let currentLinkedList = [];
+
+document.getElementById('link-load-btn').addEventListener('click', loadLinkGroup);
+document.getElementById('link-barcode-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); loadLinkGroup(); }
+});
+document.getElementById('link-add-btn').addEventListener('click', addLinkedTag);
+document.getElementById('link-add-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); addLinkedTag(); }
+});
+
+async function loadLinkGroup(){
+  const input = document.getElementById('link-barcode-input');
+  const barcode = input.value.trim().toUpperCase();
+  const statusEl = document.getElementById('link-status');
+  const groupEl = document.getElementById('link-group');
+  groupEl.classList.remove('show');
+  if (!barcode) { statusEl.textContent = 'Enter a barcode first.'; return; }
+
+  statusEl.textContent = 'Loading…';
+  try {
+    const snap = await get(ref(db, 'catalogue/items/' + barcode));
+    const node = snap.val();
+    if (!node) {
+      statusEl.textContent = 'No photos found for ' + barcode + ' — upload photos for it first, then link tags to it here.';
+      return;
+    }
+
+    const firstImage = node.imageUrl || Object.values(node.images || {})[0]?.imageUrl || null;
+    document.getElementById('link-thumb').innerHTML = firstImage ? `<img src="${firstImage}" alt="">` : '';
+    document.getElementById('link-photo-barcode').textContent = barcode;
+
+    currentLinkBarcode = barcode;
+    currentLinkedList = Array.isArray(node.linkedBarcodes) && node.linkedBarcodes.length
+      ? node.linkedBarcodes.slice()
+      : [barcode]; // not linked yet — starts as just itself
+
+    statusEl.textContent = '';
+    groupEl.classList.add('show');
+    renderLinkList();
+  } catch (e) {
+    console.error(e);
+    statusEl.textContent = 'Could not load — try again.';
+  }
+}
+
+function renderLinkList(){
+  const list = document.getElementById('link-list');
+  list.innerHTML = currentLinkedList.map((tag, i) => `
+    <div class="link-row" data-idx="${i}">
+      <span class="link-seq">${i + 1}</span>
+      <span class="barcode">${tag}</span>
+      ${i === 0 ? '<span class="link-first-tag">Quoted first</span>' : ''}
+      <span class="link-row-actions">
+        <button class="link-move-btn" data-dir="up" ${i === 0 ? 'disabled' : ''} title="Move up">↑</button>
+        <button class="link-move-btn" data-dir="down" ${i === currentLinkedList.length - 1 ? 'disabled' : ''} title="Move down">↓</button>
+        <button class="link-remove-btn" ${currentLinkedList.length <= 1 ? 'disabled' : ''} title="Remove from this group">✕</button>
+      </span>
+    </div>
+  `).join('');
+
+  list.querySelectorAll('.link-row').forEach(row => {
+    const idx = Number(row.dataset.idx);
+    const moveBtns = row.querySelectorAll('.link-move-btn');
+    moveBtns[0].addEventListener('click', () => moveLinkedTag(idx, -1));
+    moveBtns[1].addEventListener('click', () => moveLinkedTag(idx, 1));
+    row.querySelector('.link-remove-btn').addEventListener('click', () => removeLinkedTag(idx));
+  });
+}
+
+async function saveLinkedList(){
+  try {
+    await update(ref(db, '/'), { ['catalogue/items/' + currentLinkBarcode + '/linkedBarcodes']: currentLinkedList });
+  } catch (e) {
+    console.error(e);
+    document.getElementById('link-status').textContent = 'Could not save — try again.';
+  }
+}
+
+function addLinkedTag(){
+  const input = document.getElementById('link-add-input');
+  const tag = input.value.trim().toUpperCase();
+  if (!tag) return;
+  if (currentLinkedList.includes(tag)) {
+    document.getElementById('link-status').textContent = tag + ' is already in this group.';
+    return;
+  }
+  currentLinkedList.push(tag);
+  input.value = '';
+  document.getElementById('link-status').textContent = '';
+  renderLinkList();
+  saveLinkedList();
+}
+
+function removeLinkedTag(idx){
+  if (currentLinkedList.length <= 1) return; // always keep at least one tag
+  currentLinkedList.splice(idx, 1);
+  renderLinkList();
+  saveLinkedList();
+}
+
+function moveLinkedTag(idx, delta){
+  const target = idx + delta;
+  if (target < 0 || target >= currentLinkedList.length) return;
+  [currentLinkedList[idx], currentLinkedList[target]] = [currentLinkedList[target], currentLinkedList[idx]];
+  renderLinkList();
+  saveLinkedList();
+}
 
 // ---------- Manage: view & delete existing catalogue photos for a barcode ----------
 // Handles two data shapes that exist in the DB:
