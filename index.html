@@ -122,6 +122,30 @@
   .status-uploading{background:#FFF3D6; color:#8A6A2E;}
 
   .note{font-size:11.5px; color:var(--ink-soft); text-align:center; margin-top:14px; line-height:1.5;}
+
+  /* ---------- Manage (delete existing catalogue photos) ---------- */
+  .manage-search{display:flex; gap:8px; margin-bottom:16px;}
+  .manage-search input{
+    flex:1; padding:10px 12px; border:1.5px solid #E6DCCB; border-radius:9px;
+    font-size:14px; font-family:'Work Sans',sans-serif; outline:none;
+  }
+  .manage-search input:focus{border-color:var(--gold);}
+  .manage-search button{width:auto; padding:10px 16px; white-space:nowrap;}
+  .manage-status{font-size:12.5px; color:var(--ink-soft); text-align:center; margin:10px 0;}
+  .manage-grid{display:grid; grid-template-columns:repeat(2, 1fr); gap:10px;}
+  .manage-card{
+    background:#fff; border:1px solid #EEE3CC; border-radius:12px; overflow:hidden; position:relative;
+  }
+  .manage-card .thumb{aspect-ratio:1/1; background:#F0EAD9; overflow:hidden;}
+  .manage-card .thumb img{width:100%; height:100%; object-fit:cover; display:block;}
+  .manage-card .meta{padding:7px 9px 9px; font-size:10.5px; color:var(--ink-soft); display:flex; align-items:center; justify-content:space-between; gap:6px;}
+  .manage-card .hidden-tag{color:var(--err); font-weight:700;}
+  .manage-del-btn{
+    background:var(--err); color:#fff; border:none; border-radius:7px;
+    font-size:12px; padding:5px 9px; cursor:pointer; line-height:1; font-weight:700;
+  }
+  .manage-del-btn:active{transform:scale(.95);}
+  .manage-del-btn:disabled{opacity:.5;}
 </style>
 </head>
 <body>
@@ -153,6 +177,7 @@
     <div class="tabs">
       <div class="tab-btn active" id="tab-scan-btn">📷 Scan &amp; Shoot</div>
       <div class="tab-btn" id="tab-bulk-btn">📁 Existing Photos</div>
+      <div class="tab-btn" id="tab-manage-btn">🗑 Manage</div>
     </div>
 
     <!-- SCAN & SHOOT TAB -->
@@ -222,6 +247,17 @@
       <p class="note">Each upload adds a new photo for that barcode — it doesn't replace existing ones.</p>
     </div>
 
+    <!-- MANAGE TAB (delete existing catalogue photos) -->
+    <div class="tab-pane" id="tab-manage">
+      <div class="manage-search">
+        <input type="text" id="manage-barcode-input" autocomplete="off" placeholder="Enter barcode to view its photos">
+        <button class="btn" id="manage-load-btn">Load</button>
+      </div>
+      <p class="manage-status" id="manage-status"></p>
+      <div class="manage-grid" id="manage-grid"></div>
+      <p class="note">Deleting a photo here removes it permanently from Firebase Storage and the catalogue — it will disappear from the customer-facing catalogue page too. This cannot be undone.</p>
+    </div>
+
   </div>
 </div>
 
@@ -270,11 +306,14 @@ onAuthStateChanged(auth, user => {
 // ---------- Tabs ----------
 document.getElementById('tab-scan-btn').addEventListener('click', () => switchTab('scan'));
 document.getElementById('tab-bulk-btn').addEventListener('click', () => switchTab('bulk'));
+document.getElementById('tab-manage-btn').addEventListener('click', () => switchTab('manage'));
 function switchTab(name){
   document.getElementById('tab-scan-btn').classList.toggle('active', name==='scan');
   document.getElementById('tab-bulk-btn').classList.toggle('active', name==='bulk');
+  document.getElementById('tab-manage-btn').classList.toggle('active', name==='manage');
   document.getElementById('tab-scan').classList.toggle('active', name==='scan');
   document.getElementById('tab-bulk').classList.toggle('active', name==='bulk');
+  document.getElementById('tab-manage').classList.toggle('active', name==='manage');
   if (name !== 'scan') resetCapture();
 }
 
@@ -611,6 +650,140 @@ document.getElementById('upload-btn').addEventListener('click', async () => {
   }
   btn.disabled = false; btn.textContent = '⬆ Upload All';
 });
+
+// ---------- Manage: view & delete existing catalogue photos for a barcode ----------
+// Handles two data shapes that exist in the DB:
+//  - NESTED (current):  catalogue/items/{barcode}/images/{imgId} = { imageUrl, storagePath, uploadedAt, hiddenAt? }
+//  - FLAT (legacy):      catalogue/items/{barcode} = { imageUrl, available, uploadedAt, storagePath? }
+// Flat entries may or may not have a storagePath — older ones uploaded outside
+// this tool sometimes don't, in which case we can only delete the DB record
+// and the Storage file has to be removed manually via the Firebase console.
+document.getElementById('manage-load-btn').addEventListener('click', loadManagePhotos);
+document.getElementById('manage-barcode-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); loadManagePhotos(); }
+});
+
+async function loadManagePhotos(){
+  const input = document.getElementById('manage-barcode-input');
+  const barcode = input.value.trim().toUpperCase();
+  const statusEl = document.getElementById('manage-status');
+  const grid = document.getElementById('manage-grid');
+  grid.innerHTML = '';
+  if (!barcode) { statusEl.textContent = 'Enter a barcode first.'; return; }
+
+  statusEl.textContent = 'Loading…';
+  try {
+    const snap = await get(ref(db, 'catalogue/items/' + barcode));
+    const node = snap.val() || {};
+    const entries = [];
+
+    // Nested format: images/{imgId}
+    const images = node.images || {};
+    Object.keys(images).forEach(imgId => {
+      entries.push({
+        format: 'nested',
+        imgId,
+        imageUrl: images[imgId].imageUrl,
+        storagePath: images[imgId].storagePath || null,
+        uploadedAt: images[imgId].uploadedAt || 0,
+        hiddenAt: images[imgId].hiddenAt || null,
+        available: null,
+      });
+    });
+
+    // Flat format: fields directly on the barcode node
+    if (node.imageUrl) {
+      entries.push({
+        format: 'flat',
+        imgId: null,
+        imageUrl: node.imageUrl,
+        storagePath: node.storagePath || null,
+        uploadedAt: node.uploadedAt || 0,
+        hiddenAt: null,
+        available: typeof node.available === 'boolean' ? node.available : null,
+      });
+    }
+
+    entries.sort((a, b) => (b.uploadedAt || 0) - (a.uploadedAt || 0));
+
+    if (!entries.length) {
+      statusEl.textContent = 'No photos found for ' + barcode + '.';
+      return;
+    }
+    statusEl.textContent = entries.length + ' photo' + (entries.length === 1 ? '' : 's') + ' for ' + barcode;
+    renderManageGrid(barcode, entries);
+  } catch (e) {
+    console.error(e);
+    statusEl.textContent = 'Could not load photos — try again.';
+  }
+}
+
+function renderManageGrid(barcode, entries){
+  const grid = document.getElementById('manage-grid');
+  grid.innerHTML = entries.map((entry, i) => {
+    const statusLabel = entry.format === 'nested'
+      ? (entry.hiddenAt ? '<span class="hidden-tag">Hidden</span>' : 'Live')
+      : (entry.available === false ? '<span class="hidden-tag">Hidden</span>' : 'Live');
+    const noFileWarning = !entry.storagePath
+      ? '<div class="meta" style="padding-top:0;color:var(--err);font-weight:600;">No file path saved — Storage file won\'t auto-delete</div>'
+      : '';
+    return `
+      <div class="manage-card" data-idx="${i}">
+        <div class="thumb"><img src="${entry.imageUrl}" alt=""></div>
+        <div class="meta">
+          <span>${statusLabel}</span>
+          <button class="manage-del-btn" title="Delete this photo">🗑 Delete</button>
+        </div>
+        ${noFileWarning}
+      </div>
+    `;
+  }).join('');
+
+  grid.querySelectorAll('.manage-card').forEach(card => {
+    const entry = entries[Number(card.dataset.idx)];
+    card.querySelector('.manage-del-btn').addEventListener('click', () => deleteManagePhoto(barcode, entry, card));
+  });
+}
+
+async function deleteManagePhoto(barcode, entry, cardEl){
+  const warnMissingFile = !entry.storagePath
+    ? '\n\nNote: this record has no saved file path, so the photo file in Firebase Storage will NOT be deleted automatically — only the catalogue listing.'
+    : '';
+  if (!confirm('Delete this photo for ' + barcode + '? This removes it from the catalogue and cannot be undone.' + warnMissingFile)) return;
+
+  const btn = cardEl.querySelector('.manage-del-btn');
+  btn.disabled = true; btn.textContent = 'Deleting…';
+  try {
+    if (entry.storagePath) {
+      try { await deleteObject(storageRef(storage, entry.storagePath)); }
+      catch (e) { console.warn('[Manage] storage object may already be gone', e); }
+    }
+
+    if (entry.format === 'nested') {
+      await update(ref(db, '/'), { ['catalogue/items/' + barcode + '/images/' + entry.imgId]: null });
+    } else {
+      // Flat format: only clear the flat fields, leave any sibling `images`
+      // node (if this barcode also has nested-format photos) untouched.
+      await update(ref(db, '/'), {
+        ['catalogue/items/' + barcode + '/imageUrl']: null,
+        ['catalogue/items/' + barcode + '/available']: null,
+        ['catalogue/items/' + barcode + '/uploadedAt']: null,
+        ['catalogue/items/' + barcode + '/storagePath']: null,
+      });
+    }
+
+    cardEl.remove();
+    const remaining = document.getElementById('manage-grid').children.length;
+    document.getElementById('manage-status').textContent = remaining
+      ? remaining + ' photo' + (remaining === 1 ? '' : 's') + ' for ' + barcode
+      : 'No photos left for ' + barcode + '.';
+  } catch (e) {
+    console.error(e);
+    alert('Could not delete — try again.');
+    btn.disabled = false; btn.textContent = '🗑 Delete';
+  }
+}
+
 </script>
 
 </body>
