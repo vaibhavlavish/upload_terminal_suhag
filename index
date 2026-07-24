@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Suhag Jewellers — Upload Terminal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --oxblood:#3B0E17; --oxblood-deep:#2A0A10; --gold:#C6A15B; --gold-soft:#E7C9A9;
+    --ivory:#FBF6EE; --ink:#2A2420; --ink-soft:#6b6058;
+    --ok:#3E8E52; --err:#B23B3B;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; min-height:100vh; background:var(--ivory); color:var(--ink);
+    font-family:'Work Sans',sans-serif; -webkit-font-smoothing:antialiased;
+  }
+  header{
+    background:linear-gradient(180deg, var(--oxblood), var(--oxblood-deep));
+    color:var(--ivory); padding:20px; text-align:center;
+  }
+  header h1{margin:0; font-size:19px; font-weight:700;}
+  header p{margin:4px 0 0; font-size:12.5px; color:var(--gold-soft);}
+
+  .wrap{max-width:520px; margin:0 auto; padding:20px 16px 60px;}
+
+  /* ---------- Login ---------- */
+  #login-card{background:#fff; border:1px solid #EEE3CC; border-radius:14px; padding:22px; margin-top:40px;}
+  #login-card h2{margin:0 0 4px; font-size:16px;}
+  #login-card p{margin:0 0 16px; font-size:12.5px; color:var(--ink-soft);}
+  .field{margin-bottom:12px;}
+  .field label{display:block; font-size:12px; font-weight:600; margin-bottom:5px;}
+  .field input{
+    width:100%; padding:10px 12px; border:1.5px solid #E6DCCB; border-radius:9px;
+    font-size:14px; font-family:'Work Sans',sans-serif; outline:none;
+  }
+  .field input:focus{border-color:var(--gold);}
+  .btn{
+    width:100%; border:none; border-radius:10px; padding:12px 0;
+    background:var(--oxblood); color:var(--gold-soft); font-weight:700; font-size:14px;
+    cursor:pointer; font-family:'Work Sans',sans-serif;
+  }
+  .btn:active{transform:scale(.98);}
+  .btn.secondary{background:#eee; color:var(--ink); font-weight:600; font-size:13px; padding:9px 0;}
+  .btn:disabled{opacity:.5;}
+  #login-error{color:var(--err); font-size:12.5px; margin-top:10px; display:none;}
+
+  /* ---------- App shell ---------- */
+  #app-view{display:none;}
+  .topbar{display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;}
+  .topbar span{font-size:12.5px; color:var(--ink-soft);}
+  .topbar button{background:none; border:1px solid #ddd; border-radius:8px; padding:6px 12px; font-size:12px; font-weight:600; color:var(--ink-soft); cursor:pointer;}
+
+  .tabs{display:flex; gap:8px; margin-bottom:16px;}
+  .tab-btn{
+    flex:1; padding:10px 0; text-align:center; border-radius:10px; border:1.5px solid #E6DCCB;
+    background:#fff; font-size:13px; font-weight:700; color:var(--ink-soft); cursor:pointer;
+  }
+  .tab-btn.active{background:var(--oxblood); border-color:var(--oxblood); color:var(--ivory);}
+  .tab-pane{display:none;}
+  .tab-pane.active{display:block;}
+
+  /* ---------- Scan & Shoot ---------- */
+  .scan-box{
+    background:#111; border-radius:14px; overflow:hidden; position:relative;
+    aspect-ratio:3/4; display:flex; align-items:center; justify-content:center;
+  }
+  .scan-box video{width:100%; height:100%; object-fit:cover;}
+  .scan-frame{
+    position:absolute; inset:14% 10%; border:2.5px solid var(--gold); border-radius:10px;
+    box-shadow:0 0 0 1000px rgba(0,0,0,.35); pointer-events:none;
+  }
+  .scan-hint{
+    position:absolute; bottom:14px; left:0; right:0; text-align:center;
+    color:#fff; font-size:12.5px; background:rgba(0,0,0,.4); padding:6px 0;
+  }
+  .scan-placeholder{color:#999; font-size:13px; text-align:center; padding:20px;}
+
+  .scan-result{
+    background:#fff; border:1px solid #EEE3CC; border-radius:12px; padding:14px; margin-top:14px;
+    display:none;
+  }
+  .scan-result.show{display:block;}
+  .scan-result .barcode-big{font-size:20px; font-weight:700; margin:0 0 10px;}
+  .scan-actions{display:flex; gap:10px;}
+  .scan-actions .btn{font-size:13px; padding:11px 0;}
+
+  .scan-start{margin-top:14px;}
+
+  .recent-list{margin-top:18px;}
+  .recent-list h3{font-size:12.5px; color:var(--ink-soft); margin:0 0 8px; font-weight:700; text-transform:uppercase; letter-spacing:.3px;}
+  .recent-row{
+    display:flex; align-items:center; justify-content:space-between; background:#fff;
+    border:1px solid #EEE3CC; border-radius:9px; padding:8px 12px; font-size:13px; margin-bottom:6px;
+  }
+  .status-pill{font-size:10.5px; font-weight:700; padding:3px 9px; border-radius:999px;}
+  .status-done{background:#E4F3E7; color:var(--ok);}
+  .status-error{background:#FBE7E7; color:var(--err);}
+
+  /* ---------- Bulk upload (existing photos) ---------- */
+  .picker{border:2px dashed #D8CBA9; border-radius:14px; padding:26px 16px; text-align:center; background:#fff; margin-bottom:16px;}
+  .picker p{margin:0 0 14px; font-size:13px; color:var(--ink-soft);}
+  .picker-btns{display:flex; gap:10px;}
+  .picker-btns .btn{font-size:13px; padding:11px 0;}
+  input[type=file]{display:none;}
+  .summary{display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; font-size:13px; font-weight:600;}
+  .summary span.count{color:var(--ink-soft); font-weight:500;}
+  .file-list{background:#fff; border:1px solid #EEE3CC; border-radius:12px; overflow:hidden; margin-bottom:16px;}
+  .file-row{display:flex; align-items:center; gap:10px; padding:9px 12px; font-size:13px; border-bottom:1px solid #F3ECDA;}
+  .file-row:last-child{border-bottom:none;}
+  .file-row .barcode{font-weight:700; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .status-pending{background:#F0EEE9; color:var(--ink-soft);}
+  .status-uploading{background:#FFF3D6; color:#8A6A2E;}
+
+  .note{font-size:11.5px; color:var(--ink-soft); text-align:center; margin-top:14px; line-height:1.5;}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🔒 Upload Terminal</h1>
+  <p>Private — pushes photos to the Suhag Jewellers catalogue</p>
+</header>
+
+<div class="wrap">
+
+  <!-- LOGIN -->
+  <div id="login-card">
+    <h2>Sign in</h2>
+    <p>This page is only usable by the shop's own Firebase account.</p>
+    <div class="field"><label>Email</label><input type="email" id="login-email" autocomplete="username"></div>
+    <div class="field"><label>Password</label><input type="password" id="login-pass" autocomplete="current-password"></div>
+    <button class="btn" id="login-btn">Sign In</button>
+    <p id="login-error"></p>
+  </div>
+
+  <!-- APP -->
+  <div id="app-view">
+    <div class="topbar">
+      <span id="whoami"></span>
+      <button id="logout-btn">Sign out</button>
+    </div>
+
+    <div class="tabs">
+      <div class="tab-btn active" id="tab-scan-btn">📷 Scan &amp; Shoot</div>
+      <div class="tab-btn" id="tab-bulk-btn">📁 Existing Photos</div>
+    </div>
+
+    <!-- SCAN & SHOOT TAB -->
+    <div class="tab-pane active" id="tab-scan">
+      <div class="scan-box" id="scan-box">
+        <video id="scan-video" playsinline muted style="display:none;"></video>
+        <div class="scan-frame" id="scan-frame" style="display:none;"></div>
+        <div class="scan-hint" id="scan-hint" style="display:none;">Point the camera at the barcode tag</div>
+        <p class="scan-placeholder" id="scan-placeholder">Camera is off</p>
+      </div>
+      <button class="btn scan-start" id="scan-start-btn">▶ Start Scanning</button>
+      <button class="btn secondary" id="scan-stop-btn" style="display:none; margin-top:8px;">Stop Camera</button>
+
+      <div class="scan-result" id="scan-result">
+        <p class="barcode-big">Scanned: <span id="scanned-barcode"></span></p>
+        <div class="scan-actions">
+          <button class="btn secondary" id="rescan-btn">↺ Rescan</button>
+          <button class="btn" id="shoot-btn">📸 Capture &amp; Upload</button>
+        </div>
+      </div>
+
+      <div class="recent-list" id="recent-list" style="display:none;">
+        <h3>Just uploaded</h3>
+        <div id="recent-rows"></div>
+      </div>
+
+      <p class="note">Scan the tag's barcode first — the photo gets named<br>automatically. Nothing to type, ever.</p>
+    </div>
+
+    <!-- BULK / EXISTING PHOTOS TAB -->
+    <div class="tab-pane" id="tab-bulk">
+      <div class="picker">
+        <p>For photos already sitting on this device,<br>already named as their barcode (e.g. <b>PFX7113.jpg</b>).</p>
+        <div class="picker-btns">
+          <button class="btn" id="pick-files-btn">Choose Photos</button>
+          <button class="btn secondary" id="pick-folder-btn">Choose Folder</button>
+        </div>
+        <input type="file" id="file-input-files" accept="image/*" multiple>
+        <input type="file" id="file-input-folder" accept="image/*" multiple webkitdirectory directory>
+      </div>
+
+      <div id="queue-area" style="display:none;">
+        <div class="summary">
+          <span id="summary-text">0 photos selected</span>
+          <span class="count" id="summary-progress"></span>
+        </div>
+        <div class="file-list" id="file-list"></div>
+        <button class="btn" id="upload-btn">⬆ Upload All</button>
+      </div>
+
+      <p class="note">Re-uploading the same barcode simply replaces the old photo.</p>
+    </div>
+
+  </div>
+</div>
+
+<script src="https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js"></script>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut }
+  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { getDatabase, ref, update } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+import { getStorage, ref as storageRef, uploadBytes, getDownloadURL }
+  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDaRjbdCnfx5-C4OXQaByZMxK2r0Cu19bI",
+  authDomain: "suhag-f53e4.firebaseapp.com",
+  databaseURL: "https://suhag-f53e4-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "suhag-f53e4",
+  storageBucket: "suhag-f53e4.firebasestorage.app",
+  messagingSenderId: "231258063675",
+  appId: "1:231258063675:web:1c79c2a0d4d5796a6d2d1e"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getDatabase(app);
+const storage = getStorage(app);
+
+// ---------- Auth ----------
+document.getElementById('login-btn').addEventListener('click', () => {
+  const email = document.getElementById('login-email').value.trim();
+  const pass = document.getElementById('login-pass').value;
+  const errEl = document.getElementById('login-error');
+  errEl.style.display = 'none';
+  signInWithEmailAndPassword(auth, email, pass).catch(() => {
+    errEl.textContent = 'Sign-in failed — check email/password.';
+    errEl.style.display = 'block';
+  });
+});
+document.getElementById('logout-btn').addEventListener('click', () => signOut(auth));
+onAuthStateChanged(auth, user => {
+  document.getElementById('login-card').style.display = user ? 'none' : 'block';
+  document.getElementById('app-view').style.display = user ? 'block' : 'none';
+  if (user) document.getElementById('whoami').textContent = user.email;
+  else stopScanning();
+});
+
+// ---------- Tabs ----------
+document.getElementById('tab-scan-btn').addEventListener('click', () => switchTab('scan'));
+document.getElementById('tab-bulk-btn').addEventListener('click', () => switchTab('bulk'));
+function switchTab(name){
+  document.getElementById('tab-scan-btn').classList.toggle('active', name==='scan');
+  document.getElementById('tab-bulk-btn').classList.toggle('active', name==='bulk');
+  document.getElementById('tab-scan').classList.toggle('active', name==='scan');
+  document.getElementById('tab-bulk').classList.toggle('active', name==='bulk');
+  if (name !== 'scan') stopScanning();
+}
+
+// ---------- Shared: compress + upload one photo for a barcode ----------
+async function uploadForBarcode(barcode, blob){
+  const path = 'catalogueImages/' + barcode + '.jpg';
+  const sRef = storageRef(storage, path);
+  await uploadBytes(sRef, blob, { contentType: 'image/jpeg' });
+  const url = await getDownloadURL(sRef);
+  const updates = {};
+  updates['catalogue/items/' + barcode] = { available: true, imageUrl: url, uploadedAt: Date.now() };
+  await update(ref(db, '/'), updates);
+}
+
+function compressCanvasToBlob(canvas){
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('Compression failed')), 'image/jpeg', 0.75);
+  });
+}
+
+function resizedCanvasFromVideo(video, maxW){
+  const scale = Math.min(1, maxW / video.videoWidth);
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(video.videoWidth * scale);
+  canvas.height = Math.round(video.videoHeight * scale);
+  canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+  return canvas;
+}
+
+function addRecentRow(barcode, ok){
+  document.getElementById('recent-list').style.display = 'block';
+  const row = document.createElement('div');
+  row.className = 'recent-row';
+  row.innerHTML = `<span>${barcode}</span><span class="status-pill ${ok ? 'status-done' : 'status-error'}">${ok ? '✓ Uploaded' : 'Failed'}</span>`;
+  document.getElementById('recent-rows').prepend(row);
+}
+
+// ---------- Scan & Shoot ----------
+let codeReader = null;
+let scannedBarcode = null;
+let videoStream = null;
+
+document.getElementById('scan-start-btn').addEventListener('click', startScanning);
+document.getElementById('scan-stop-btn').addEventListener('click', stopScanning);
+document.getElementById('rescan-btn').addEventListener('click', () => {
+  document.getElementById('scan-result').classList.remove('show');
+  scannedBarcode = null;
+  resumeDecoding();
+});
+document.getElementById('shoot-btn').addEventListener('click', captureAndUpload);
+
+async function startScanning(){
+  const video = document.getElementById('scan-video');
+  document.getElementById('scan-placeholder').style.display = 'none';
+  video.style.display = 'block';
+  document.getElementById('scan-frame').style.display = 'block';
+  document.getElementById('scan-hint').style.display = 'block';
+  document.getElementById('scan-start-btn').style.display = 'none';
+  document.getElementById('scan-stop-btn').style.display = 'block';
+
+  codeReader = new ZXing.BrowserMultiFormatReader();
+  try {
+    const devices = await ZXing.BrowserCodeReader.listVideoInputDevices();
+    const rear = devices.find(d => /back|rear|environment/i.test(d.label)) || devices[devices.length - 1];
+    codeReader.decodeFromVideoDevice(rear ? rear.deviceId : undefined, video, (result, err) => {
+      if (result && !scannedBarcode) onBarcodeScanned(result.getText());
+    });
+  } catch (e) {
+    console.error(e);
+    alert('Could not access the camera. Check camera permission for this site.');
+    stopScanning();
+  }
+}
+
+function resumeDecoding(){
+  // codeReader keeps running in the background; just clear the flag so the
+  // next successful decode is accepted again.
+}
+
+function stopScanning(){
+  if (codeReader) { try { codeReader.reset(); } catch(e){} codeReader = null; }
+  scannedBarcode = null;
+  document.getElementById('scan-video').style.display = 'none';
+  document.getElementById('scan-frame').style.display = 'none';
+  document.getElementById('scan-hint').style.display = 'none';
+  document.getElementById('scan-placeholder').style.display = 'block';
+  document.getElementById('scan-start-btn').style.display = 'block';
+  document.getElementById('scan-stop-btn').style.display = 'none';
+  document.getElementById('scan-result').classList.remove('show');
+}
+
+function onBarcodeScanned(text){
+  scannedBarcode = text.trim().toUpperCase();
+  document.getElementById('scanned-barcode').textContent = scannedBarcode;
+  document.getElementById('scan-result').classList.add('show');
+}
+
+async function captureAndUpload(){
+  if (!scannedBarcode) return;
+  const barcode = scannedBarcode;
+  const btn = document.getElementById('shoot-btn');
+  btn.disabled = true; btn.textContent = 'Uploading…';
+  try{
+    const video = document.getElementById('scan-video');
+    const canvas = resizedCanvasFromVideo(video, 900);
+    const blob = await compressCanvasToBlob(canvas);
+    await uploadForBarcode(barcode, blob);
+    addRecentRow(barcode, true);
+  }catch(err){
+    console.error(err);
+    addRecentRow(barcode, false);
+  }
+  btn.disabled = false; btn.textContent = '📸 Capture & Upload';
+  document.getElementById('scan-result').classList.remove('show');
+  scannedBarcode = null;
+  // camera + scanning loop is still running — ready for the next tag immediately
+}
+
+// ---------- Bulk / existing photos (unchanged from before) ----------
+let queue = [];
+document.getElementById('pick-files-btn').addEventListener('click', () => document.getElementById('file-input-files').click());
+document.getElementById('pick-folder-btn').addEventListener('click', () => document.getElementById('file-input-folder').click());
+
+function handleFiles(fileList){
+  const files = Array.from(fileList).filter(f => f.type.startsWith('image/'));
+  queue = files.map(file => ({ file, barcode: file.name.replace(/\.[^.]+$/, '').trim().toUpperCase(), status: 'pending' }));
+  renderQueue();
+}
+document.getElementById('file-input-files').addEventListener('change', e => handleFiles(e.target.files));
+document.getElementById('file-input-folder').addEventListener('change', e => handleFiles(e.target.files));
+
+function renderQueue(){
+  const area = document.getElementById('queue-area');
+  area.style.display = queue.length ? 'block' : 'none';
+  document.getElementById('summary-text').textContent = queue.length + ' photo' + (queue.length===1?'':'s') + ' selected';
+  const done = queue.filter(q => q.status === 'done').length;
+  document.getElementById('summary-progress').textContent = done ? (done + ' of ' + queue.length + ' done') : '';
+  document.getElementById('file-list').innerHTML = queue.map(q => `
+    <div class="file-row">
+      <span class="barcode">${q.barcode}</span>
+      <span class="status-pill status-${q.status}">${
+        q.status === 'pending' ? 'Waiting' : q.status === 'uploading' ? 'Uploading…' : q.status === 'done' ? '✓ Done' : 'Failed'
+      }</span>
+    </div>
+  `).join('');
+}
+
+function compressImageFile(file){
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const canvas = resizedCanvasFromImg(img, 900);
+      canvas.toBlob(blob => { URL.revokeObjectURL(url); blob ? resolve(blob) : reject(new Error('Compression failed')); }, 'image/jpeg', 0.75);
+    };
+    img.onerror = () => reject(new Error('Could not read image'));
+    img.src = url;
+  });
+}
+function resizedCanvasFromImg(img, maxW){
+  const scale = Math.min(1, maxW / img.width);
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(img.width * scale);
+  canvas.height = Math.round(img.height * scale);
+  canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+  return canvas;
+}
+
+document.getElementById('upload-btn').addEventListener('click', async () => {
+  const btn = document.getElementById('upload-btn');
+  btn.disabled = true; btn.textContent = 'Uploading…';
+  for (const item of queue){
+    if (item.status === 'done') continue;
+    item.status = 'uploading'; renderQueue();
+    try{
+      const blob = await compressImageFile(item.file);
+      await uploadForBarcode(item.barcode, blob);
+      item.status = 'done';
+    }catch(err){ console.error(err); item.status = 'error'; }
+    renderQueue();
+  }
+  btn.disabled = false; btn.textContent = '⬆ Upload All';
+});
+</script>
+
+</body>
+</html>
