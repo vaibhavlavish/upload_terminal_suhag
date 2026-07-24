@@ -353,16 +353,26 @@
           <span class="placeholder" id="home-add-placeholder">No image chosen yet</span>
         </div>
         <div class="field">
-          <label>Opens this category when tapped</label>
-          <select id="home-category-select">
-            <option value="all">Shop All (full catalogue)</option>
-          </select>
+          <label>Opens when tapped</label>
+          <div class="tabs" style="margin-bottom:10px;">
+            <div class="tab-btn active" id="home-link-type-category" style="font-size:12.5px; padding:8px 0;">A Category</div>
+            <div class="tab-btn" id="home-link-type-item" style="font-size:12.5px; padding:8px 0;">A Specific Item</div>
+          </div>
+          <div id="home-link-category-field">
+            <select id="home-category-select">
+              <option value="all">Shop All (full catalogue)</option>
+            </select>
+            <button class="btn secondary" id="home-copy-category-link-btn" type="button" style="margin-top:8px; font-size:12.5px; padding:8px 0;">🔗 Copy Link to This Category</button>
+          </div>
+          <div id="home-link-item-field" style="display:none;">
+            <input type="text" id="home-item-barcode-input" autocomplete="off" placeholder="Enter the item's tag/barcode (e.g. GCH1)">
+          </div>
         </div>
         <button class="btn" id="home-add-btn">+ Add Banner</button>
         <p class="link-status" id="home-add-status"></p>
       </div>
 
-      <p class="note">These are the attractive lead images customers see first when they open the catalogue. Tapping one takes them straight into whichever category you pick above. Categories are pulled from what's actually live in the catalogue right now, so upload &amp; link your stock first if a category you expect isn't listed yet.</p>
+      <p class="note">These are the attractive lead images customers see first when they open the catalogue. Tapping one takes them straight into whichever category — or specific item — you pick above. Categories are pulled from what's actually live in the catalogue right now, so upload &amp; link your stock first if a category you expect isn't listed yet.</p>
     </div>
 
     <!-- MANAGE TAB (delete existing catalogue photos) -->
@@ -372,6 +382,7 @@
         <button class="btn" id="manage-load-btn">Load</button>
       </div>
       <p class="manage-status" id="manage-status"></p>
+      <button class="btn secondary" id="manage-copy-link-btn" type="button" style="display:none; margin-bottom:16px;">🔗 Copy Shareable Link to This Item</button>
       <div class="manage-grid" id="manage-grid"></div>
       <p class="note">Deleting a photo here removes it permanently from Firebase Storage and the catalogue — it will disappear from the customer-facing catalogue page too. This cannot be undone.</p>
     </div>
@@ -401,6 +412,21 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getDatabase(app);
 const storage = getStorage(app);
+
+// Base URL of the public customer catalogue — used to build shareable
+// deep links (?item=... / ?category=...) for Instagram, WhatsApp, etc.
+const CATALOGUE_BASE_URL = 'https://vaibhavlavish.github.io/SUHAG_CATALOGUE/';
+
+async function copyLinkToClipboard(url, statusEl){
+  try {
+    await navigator.clipboard.writeText(url);
+    statusEl.textContent = 'Link copied! ' + url;
+  } catch (e) {
+    // Clipboard API can fail on some older/locked-down mobile browsers —
+    // show the raw link so it can still be copied by hand.
+    statusEl.textContent = 'Copy this link: ' + url;
+  }
+}
 
 // ---------- Auth ----------
 document.getElementById('login-btn').addEventListener('click', () => {
@@ -951,6 +977,25 @@ async function loadHomeCategories(){
   }
 }
 
+// Toggle between "opens a category" vs "opens one specific item" for the
+// banner being added.
+let homeLinkType = 'category';
+document.getElementById('home-link-type-category').addEventListener('click', () => setHomeLinkType('category'));
+document.getElementById('home-link-type-item').addEventListener('click', () => setHomeLinkType('item'));
+function setHomeLinkType(type){
+  homeLinkType = type;
+  document.getElementById('home-link-type-category').classList.toggle('active', type === 'category');
+  document.getElementById('home-link-type-item').classList.toggle('active', type === 'item');
+  document.getElementById('home-link-category-field').style.display = type === 'category' ? 'block' : 'none';
+  document.getElementById('home-link-item-field').style.display = type === 'item' ? 'block' : 'none';
+}
+
+document.getElementById('home-copy-category-link-btn').addEventListener('click', () => {
+  const key = document.getElementById('home-category-select').value;
+  const url = CATALOGUE_BASE_URL + (key === 'all' ? '' : '?category=' + encodeURIComponent(key));
+  copyLinkToClipboard(url, document.getElementById('home-add-status'));
+});
+
 document.getElementById('home-banner-pick-btn').addEventListener('click', () => document.getElementById('home-banner-file').click());
 
 // Live preview thumbnail as soon as a file is chosen.
@@ -972,7 +1017,7 @@ async function loadHomeBanners(){
     const snap = await get(ref(db, 'catalogue/homeBanners'));
     const val = snap.val() || {};
     const banners = Object.keys(val)
-      .map(id => ({ id, imageUrl: val[id].imageUrl, storagePath: val[id].storagePath, categoryKey: val[id].categoryKey || 'all', order: val[id].order || 0 }))
+      .map(id => ({ id, imageUrl: val[id].imageUrl, storagePath: val[id].storagePath, categoryKey: val[id].categoryKey || 'all', itemBarcode: val[id].itemBarcode || null, order: val[id].order || 0 }))
       .sort((a, b) => a.order - b.order);
     renderHomeBannerList(banners);
   } catch (e) {
@@ -990,7 +1035,7 @@ function renderHomeBannerList(banners){
   list.innerHTML = banners.map((b, i) => `
     <div class="home-banner-row" data-idx="${i}">
       <div class="thumb"><img src="${b.imageUrl}" alt=""></div>
-      <span class="cat">${homeCategoryLabel(b.categoryKey)}</span>
+      <span class="cat">${b.itemBarcode ? ('Item: ' + b.itemBarcode) : homeCategoryLabel(b.categoryKey)}</span>
       <span class="home-banner-row-actions">
         <button class="link-move-btn" data-dir="up" ${i === 0 ? 'disabled' : ''} title="Move up">↑</button>
         <button class="link-move-btn" data-dir="down" ${i === banners.length - 1 ? 'disabled' : ''} title="Move down">↓</button>
@@ -1042,8 +1087,25 @@ document.getElementById('home-add-btn').addEventListener('click', async () => {
   const fileInput = document.getElementById('home-banner-file');
   const file = fileInput.files[0];
   const statusEl = document.getElementById('home-add-status');
-  const categoryKey = document.getElementById('home-category-select').value;
   if (!file) { statusEl.textContent = 'Choose an image first.'; return; }
+
+  let categoryKey = 'all', itemBarcode = null;
+  if (homeLinkType === 'item') {
+    itemBarcode = document.getElementById('home-item-barcode-input').value.trim().toUpperCase();
+    if (!itemBarcode) { statusEl.textContent = 'Enter the item\'s barcode.'; return; }
+    // Confirm this barcode actually has photos uploaded before attaching a
+    // banner to it — otherwise tapping the banner would lead nowhere.
+    try {
+      const snap = await get(ref(db, 'catalogue/items/' + itemBarcode));
+      if (!snap.val()) { statusEl.textContent = 'No photos found for ' + itemBarcode + ' — upload &amp; link it first.'; return; }
+    } catch (e) {
+      console.error(e);
+      statusEl.textContent = 'Could not verify that barcode — try again.';
+      return;
+    }
+  } else {
+    categoryKey = document.getElementById('home-category-select').value;
+  }
 
   const btn = document.getElementById('home-add-btn');
   btn.disabled = true; btn.textContent = 'Uploading…';
@@ -1056,12 +1118,13 @@ document.getElementById('home-add-btn').addEventListener('click', async () => {
     await uploadBytes(sRef, blob, { contentType: 'image/jpeg' });
     const url = await getDownloadURL(sRef);
     await update(ref(db, '/'), {
-      ['catalogue/homeBanners/' + bannerId]: { imageUrl: url, storagePath, categoryKey, order: Date.now() }
+      ['catalogue/homeBanners/' + bannerId]: { imageUrl: url, storagePath, categoryKey, itemBarcode, order: Date.now() }
     });
     fileInput.value = '';
     document.getElementById('home-add-thumb').innerHTML = '';
     document.getElementById('home-add-placeholder').style.display = 'block';
     document.getElementById('home-banner-pick-btn').textContent = 'Choose Photo';
+    document.getElementById('home-item-barcode-input').value = '';
     loadHomeBanners();
   } catch (e) {
     console.error(e);
@@ -1087,7 +1150,9 @@ async function loadManagePhotos(){
   const barcode = input.value.trim().toUpperCase();
   const statusEl = document.getElementById('manage-status');
   const grid = document.getElementById('manage-grid');
+  const copyLinkBtn = document.getElementById('manage-copy-link-btn');
   grid.innerHTML = '';
+  copyLinkBtn.style.display = 'none';
   if (!barcode) { statusEl.textContent = 'Enter a barcode first.'; return; }
 
   statusEl.textContent = 'Loading…';
@@ -1131,6 +1196,9 @@ async function loadManagePhotos(){
     }
     statusEl.textContent = entries.length + ' photo' + (entries.length === 1 ? '' : 's') + ' for ' + barcode;
     renderManageGrid(barcode, entries);
+
+    copyLinkBtn.style.display = 'block';
+    copyLinkBtn.onclick = () => copyLinkToClipboard(CATALOGUE_BASE_URL + '?item=' + encodeURIComponent(barcode), statusEl);
   } catch (e) {
     console.error(e);
     statusEl.textContent = 'Could not load photos — try again.';
