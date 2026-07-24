@@ -321,7 +321,7 @@ async function startScanning(){
     const primer = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
     primer.getTracks().forEach(t => t.stop());
 
-    const devices = await ZXing.BrowserCodeReader.listVideoInputDevices();
+    const devices = await codeReader.listVideoInputDevices();
     const rear = devices.find(d => /back|rear|environment/i.test(d.label)) || devices[devices.length - 1];
     codeReader.decodeFromVideoDevice(rear ? rear.deviceId : undefined, video, (result, err) => {
       if (result && !scannedBarcode) onBarcodeScanned(result.getText());
