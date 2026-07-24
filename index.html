@@ -315,6 +315,12 @@ async function startScanning(){
 
   codeReader = new ZXing.BrowserMultiFormatReader();
   try {
+    // Explicitly request camera access first so the browser actually shows
+    // the permission prompt (listVideoInputDevices alone doesn't reliably
+    // trigger it on some Android/Chrome versions).
+    const primer = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+    primer.getTracks().forEach(t => t.stop());
+
     const devices = await ZXing.BrowserCodeReader.listVideoInputDevices();
     const rear = devices.find(d => /back|rear|environment/i.test(d.label)) || devices[devices.length - 1];
     codeReader.decodeFromVideoDevice(rear ? rear.deviceId : undefined, video, (result, err) => {
@@ -322,7 +328,7 @@ async function startScanning(){
     });
   } catch (e) {
     console.error(e);
-    alert('Could not access the camera. Check camera permission for this site.');
+    alert('Could not access the camera (' + (e.name || e.message) + '). Check camera permission for this site in your browser settings.');
     stopScanning();
   }
 }
