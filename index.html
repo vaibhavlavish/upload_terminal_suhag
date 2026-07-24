@@ -96,6 +96,12 @@
     display:flex; align-items:center; justify-content:space-between; background:#fff;
     border:1px solid #EEE3CC; border-radius:9px; padding:8px 12px; font-size:13px; margin-bottom:6px;
   }
+  .row-actions{display:flex; align-items:center; gap:8px;}
+  .del-btn{
+    background:none; border:1px solid #EEDADA; border-radius:7px; color:var(--err);
+    font-size:13px; padding:4px 8px; cursor:pointer; line-height:1;
+  }
+  .del-btn:active{transform:scale(.95);}
   .status-pill{font-size:10.5px; font-weight:700; padding:3px 9px; border-radius:999px;}
   .status-done{background:#E4F3E7; color:var(--ok);}
   .status-error{background:#FBE7E7; color:var(--err);}
@@ -213,7 +219,7 @@
         <button class="btn" id="upload-btn">⬆ Upload All</button>
       </div>
 
-      <p class="note">Re-uploading the same barcode simply replaces the old photo.</p>
+      <p class="note">Each upload adds a new photo for that barcode — it doesn't replace existing ones.</p>
     </div>
 
   </div>
@@ -224,7 +230,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/fireba
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { getDatabase, ref, update, get } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
-import { getStorage, ref as storageRef, uploadBytes, getDownloadURL }
+import { getStorage, ref as storageRef, uploadBytes, getDownloadURL, deleteObject }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
 const firebaseConfig = {
@@ -257,7 +263,7 @@ document.getElementById('logout-btn').addEventListener('click', () => signOut(au
 onAuthStateChanged(auth, user => {
   document.getElementById('login-card').style.display = user ? 'none' : 'block';
   document.getElementById('app-view').style.display = user ? 'block' : 'none';
-  if (user) document.getElementById('whoami').textContent = user.email;
+  if (user) { document.getElementById('whoami').textContent = user.email; runCatalogueCleanupSweep(); }
   else resetCapture();
 });
 
@@ -272,17 +278,11 @@ function switchTab(name){
   if (name !== 'scan') resetCapture();
 }
 
-// ---------- Stock check against the main Suhag Price Checker data ----------
-// Same Firebase project — reads jewelryData/products for existence and
-// replicates that app's getSoldBarcodesForStock() logic (bill/invoice items,
-// productDataImportedAt cutoff for barcode-reuse safety, minus returns) to
-// decide whether a barcode is still physically in stock.
-async function checkBarcodeInStock(barcode){
-  const bc = barcode.trim().toUpperCase();
-
-  const prodSnap = await get(ref(db, 'jewelryData/products/' + bc));
-  if (!prodSnap.exists()) return { ok: false, reason: 'Barcode not found in product catalog.' };
-
+// ---------- Sold-barcode set, shared by the stock check and the cleanup sweep ----------
+// Replicates the main Suhag Price Checker app's getSoldBarcodesForStock():
+// bill/invoice items, gated by productDataImportedAt (barcode-reuse safety),
+// minus anything in returnedBarcodes.
+async function getSoldBarcodeSet(){
   const [cutoffSnap, billSnap, invSnap, returnedSnap] = await Promise.all([
     get(ref(db, 'jewelryData/productDataImportedAt')),
     get(ref(db, 'jewelryData/billHistory')),
@@ -290,14 +290,14 @@ async function checkBarcodeInStock(barcode){
     get(ref(db, 'jewelryData/returnedBarcodes')),
   ]);
   const cutoff = cutoffSnap.exists() ? cutoffSnap.val() : 0;
+  const sold = new Set();
 
-  let sold = false;
   Object.values(billSnap.val() || {}).forEach(bill => {
     if (!bill) return;
     const ts = bill.timestamp ? new Date(bill.timestamp).getTime() : 0;
     if (ts < cutoff) return;
     (bill.items || []).forEach(item => {
-      if (item && item.barcode && String(item.barcode).trim().toUpperCase() === bc) sold = true;
+      if (item && item.barcode) sold.add(String(item.barcode).trim().toUpperCase());
     });
   });
   Object.values(invSnap.val() || {}).forEach(inv => {
@@ -305,25 +305,97 @@ async function checkBarcodeInStock(barcode){
     const ts = inv.timestamp ? new Date(inv.timestamp).getTime() : 0;
     if (ts < cutoff) return;
     (inv.items || []).forEach(item => {
-      if (item && item.barcode && String(item.barcode).trim().toUpperCase() === bc) sold = true;
+      if (item && item.barcode) sold.add(String(item.barcode).trim().toUpperCase());
     });
   });
   const returnedVal = returnedSnap.val() || {};
-  if (Object.keys(returnedVal).some(k => k.toUpperCase() === bc)) sold = false;
+  Object.keys(returnedVal).forEach(k => sold.delete(k.toUpperCase()));
 
-  if (sold) return { ok: false, reason: 'This barcode has already been sold.' };
+  return sold;
+}
+
+// ---------- Stock check against the main Suhag Price Checker data ----------
+async function checkBarcodeInStock(barcode){
+  const bc = barcode.trim().toUpperCase();
+  const prodSnap = await get(ref(db, 'jewelryData/products/' + bc));
+  if (!prodSnap.exists()) return { ok: false, reason: 'Barcode not found in product catalog.' };
+
+  const sold = await getSoldBarcodeSet();
+  if (sold.has(bc)) return { ok: false, reason: 'This barcode has already been sold.' };
   return { ok: true };
 }
 
+// ---------- Catalogue cleanup sweep ----------
+// Runs once per login. For every uploaded photo whose barcode is currently
+// sold in the main app: marks it hidden (first time) with a timestamp, or —
+// if it's been hidden 30+ days — permanently deletes the Storage file and
+// its DB entry to save space. A barcode that comes back into stock (return)
+// has its hidden mark cleared automatically.
+// NOTE: this only runs when someone is logged into this Upload Terminal.
+// If photos should also be hidden/expired from a separate customer-facing
+// catalogue page, that page needs the same `hiddenAt` check (share it with
+// me and I'll wire it up there too).
+async function runCatalogueCleanupSweep(){
+  const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+  try {
+    const [sold, prodSnap, catSnap] = await Promise.all([
+      getSoldBarcodeSet(),
+      get(ref(db, 'jewelryData/products')),
+      get(ref(db, 'catalogue/items')),
+    ]);
+    const productBarcodes = new Set(Object.keys(prodSnap.val() || {}).map(b => b.toUpperCase()));
+    const catalogue = catSnap.val() || {};
+    const now = Date.now();
+    const updates = {};
+    let deletedCount = 0, hiddenCount = 0;
+
+    for (const barcode in catalogue) {
+      const bcUpper = barcode.toUpperCase();
+      const isSold = productBarcodes.has(bcUpper) && sold.has(bcUpper);
+      const images = (catalogue[barcode] && catalogue[barcode].images) || {};
+      for (const imgId in images) {
+        const img = images[imgId];
+        const path = 'catalogue/items/' + barcode + '/images/' + imgId;
+        if (isSold) {
+          if (!img.hiddenAt) {
+            updates[path + '/hiddenAt'] = now;
+            hiddenCount++;
+          } else if (now - img.hiddenAt > THIRTY_DAYS_MS) {
+            if (img.storagePath) {
+              try { await deleteObject(storageRef(storage, img.storagePath)); }
+              catch (e) { console.warn('[Cleanup] storage delete failed for', img.storagePath, e); }
+            }
+            updates[path] = null;
+            deletedCount++;
+          }
+        } else if (img.hiddenAt) {
+          updates[path + '/hiddenAt'] = null; // back in stock — unhide
+        }
+      }
+    }
+
+    if (Object.keys(updates).length) {
+      await update(ref(db, '/'), updates);
+      console.log('[Cleanup] sweep done —', hiddenCount, 'newly hidden,', deletedCount, 'deleted.');
+    }
+  } catch (e) {
+    console.error('[Cleanup] sweep failed', e);
+  }
+}
+
 // ---------- Shared: compress + upload one photo for a barcode ----------
+// Each capture gets its own image entry — re-uploading the same barcode adds
+// another photo rather than replacing the previous one.
 async function uploadForBarcode(barcode, blob){
-  const path = 'catalogueImages/' + barcode + '.jpg';
-  const sRef = storageRef(storage, path);
+  const imageId = Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+  const storagePath = 'catalogueImages/' + barcode + '/' + imageId + '.jpg';
+  const sRef = storageRef(storage, storagePath);
   await uploadBytes(sRef, blob, { contentType: 'image/jpeg' });
   const url = await getDownloadURL(sRef);
   const updates = {};
-  updates['catalogue/items/' + barcode] = { available: true, imageUrl: url, uploadedAt: Date.now() };
+  updates['catalogue/items/' + barcode + '/images/' + imageId] = { imageUrl: url, storagePath, uploadedAt: Date.now() };
   await update(ref(db, '/'), updates);
+  return { imageId, storagePath };
 }
 
 function compressCanvasToBlob(canvas){
@@ -341,15 +413,37 @@ function resizedCanvasFromVideo(video, maxW){
   return canvas;
 }
 
-function addRecentRow(barcode, ok){
+function addRecentRow(barcode, ok, imageRef){
   document.getElementById('recent-list').style.display = 'block';
   const row = document.createElement('div');
   row.className = 'recent-row';
-  row.innerHTML = `<span>${barcode}</span><span class="status-pill ${ok ? 'status-done' : 'status-error'}">${ok ? '✓ Uploaded' : 'Failed'}</span>`;
+  const pill = `<span class="status-pill ${ok ? 'status-done' : 'status-error'}">${ok ? '✓ Uploaded' : 'Failed'}</span>`;
+  const delBtn = ok ? `<button class="del-btn" title="Delete this photo">🗑</button>` : '';
+  row.innerHTML = `<span>${barcode}</span><span class="row-actions">${pill}${delBtn}</span>`;
+  if (ok && imageRef) {
+    row.querySelector('.del-btn').addEventListener('click', () => deleteUploadedImage(barcode, imageRef, row));
+  }
   document.getElementById('recent-rows').prepend(row);
 }
 
+async function deleteUploadedImage(barcode, imageRef, row){
+  if (!confirm('Delete this photo for ' + barcode + '? This cannot be undone.')) return;
+  try {
+    if (imageRef.storagePath) await deleteObject(storageRef(storage, imageRef.storagePath));
+  } catch (e) { console.warn('[Delete] storage object may already be gone', e); }
+  try {
+    await update(ref(db, '/'), { ['catalogue/items/' + barcode + '/images/' + imageRef.imageId]: null });
+    row.remove();
+  } catch (e) {
+    console.error(e);
+    alert('Could not delete — try again.');
+  }
+}
+
 // ---------- Upload Product: barcode entry -> stock confirm -> photo capture ----------
+// The camera stream, once granted, is kept alive across barcodes (not
+// stopped/restarted per item) so scanning many tags back-to-back doesn't pay
+// a camera-reinit delay each time.
 let confirmedBarcode = null;
 let videoStream = null;
 
@@ -366,7 +460,8 @@ barcodeInput.addEventListener('keydown', e => {
 document.getElementById('shoot-btn').addEventListener('click', captureAndUpload);
 
 function showBarcodeForm(){
-  if (videoStream) { videoStream.getTracks().forEach(t => t.stop()); videoStream = null; }
+  // Camera stream is left running — only the capture UI is hidden — so the
+  // next confirmed barcode can reuse it instantly.
   document.getElementById('barcode-entry').style.display = 'none';
   document.getElementById('capture-section').style.display = 'none';
   document.getElementById('barcode-form').style.display = 'block';
@@ -416,6 +511,12 @@ async function openCameraForCapture(){
   document.getElementById('capture-section').style.display = 'block';
   document.getElementById('confirmed-barcode-label').textContent = 'Barcode: ' + confirmedBarcode;
   const video = document.getElementById('scan-video');
+
+  // Reuse the existing camera stream if it's still live — no need to
+  // re-request it (and re-pay the reinit delay) for every barcode.
+  const alreadyLive = videoStream && videoStream.getVideoTracks().some(t => t.readyState === 'live');
+  if (alreadyLive) return;
+
   try {
     videoStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
     video.srcObject = videoStream;
@@ -435,14 +536,14 @@ async function captureAndUpload(){
     const video = document.getElementById('scan-video');
     const canvas = resizedCanvasFromVideo(video, 900);
     const blob = await compressCanvasToBlob(canvas);
-    await uploadForBarcode(barcode, blob);
-    addRecentRow(barcode, true);
+    const imageRef = await uploadForBarcode(barcode, blob);
+    addRecentRow(barcode, true, imageRef);
   }catch(err){
     console.error(err);
-    addRecentRow(barcode, false);
+    addRecentRow(barcode, false, null);
   }
   btn.disabled = false; btn.textContent = '📸 Capture & Upload';
-  resetCapture();
+  showBarcodeForm(); // camera stays on — ready for the next barcode immediately
 }
 
 // ---------- Bulk / existing photos (unchanged from before) ----------
