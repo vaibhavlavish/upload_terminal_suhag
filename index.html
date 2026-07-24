@@ -1051,7 +1051,7 @@ document.getElementById('home-add-btn').addEventListener('click', async () => {
   try {
     const blob = await compressImageFile(file, BANNER_TARGET_MAX_BYTES);
     const bannerId = Date.now() + '_' + Math.random().toString(36).slice(2, 8);
-    const storagePath = 'homeBannerImages/' + bannerId + '.jpg';
+    const storagePath = 'catalogueImages/_homeBanners/' + bannerId + '.jpg';
     const sRef = storageRef(storage, storagePath);
     await uploadBytes(sRef, blob, { contentType: 'image/jpeg' });
     const url = await getDownloadURL(sRef);
