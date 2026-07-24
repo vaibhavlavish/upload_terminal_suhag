@@ -83,9 +83,10 @@
     display:none;
   }
   .scan-result.show{display:block;}
-  .scan-result .barcode-big{font-size:20px; font-weight:700; margin:0 0 10px;}
+  .barcode-big{font-size:20px; font-weight:700; margin:0 0 10px;}
   .scan-actions{display:flex; gap:10px;}
   .scan-actions .btn{font-size:13px; padding:11px 0;}
+  .note.error{color:var(--err); font-weight:600;}
 
   .scan-start{margin-top:14px;}
 
@@ -150,20 +151,36 @@
 
     <!-- SCAN & SHOOT TAB -->
     <div class="tab-pane active" id="tab-scan">
-      <div class="scan-box" id="scan-box">
-        <video id="scan-video" playsinline muted style="display:none;"></video>
-        <div class="scan-frame" id="scan-frame" style="display:none;"></div>
-        <div class="scan-hint" id="scan-hint" style="display:none;">Point the camera at the barcode tag</div>
-        <p class="scan-placeholder" id="scan-placeholder">Camera is off</p>
-      </div>
-      <button class="btn scan-start" id="scan-start-btn">▶ Start Scanning</button>
-      <button class="btn secondary" id="scan-stop-btn" style="display:none; margin-top:8px;">Stop Camera</button>
 
-      <div class="scan-result" id="scan-result">
-        <p class="barcode-big">Scanned: <span id="scanned-barcode"></span></p>
+      <!-- STEP 1: entry point -->
+      <div id="barcode-entry">
+        <button class="btn scan-start" id="upload-product-btn">⬆ Upload Product</button>
+      </div>
+
+      <!-- STEP 2: barcode field (typed or hardware scanner) -->
+      <div id="barcode-form" style="display:none;">
+        <div class="field">
+          <label>Barcode</label>
+          <input type="text" id="barcode-input" autocomplete="off" placeholder="Scan or type barcode">
+        </div>
+        <p class="note" id="barcode-status" style="display:none;"></p>
         <div class="scan-actions">
-          <button class="btn secondary" id="rescan-btn">↺ Rescan</button>
-          <button class="btn" id="shoot-btn">📸 Capture &amp; Upload</button>
+          <button class="btn secondary" id="barcode-cancel-btn">Cancel</button>
+          <button class="btn" id="barcode-confirm-btn">Confirm</button>
+        </div>
+      </div>
+
+      <!-- STEP 3: camera + capture -->
+      <div id="capture-section" style="display:none;">
+        <p class="barcode-big" id="confirmed-barcode-label" style="margin-bottom:10px;"></p>
+        <div class="scan-box" id="scan-box">
+          <video id="scan-video" playsinline muted autoplay style="display:block;"></video>
+        </div>
+        <div class="scan-result show" style="margin-top:14px;">
+          <div class="scan-actions">
+            <button class="btn secondary" id="rescan-btn">↺ Change Barcode</button>
+            <button class="btn" id="shoot-btn">📸 Capture &amp; Upload</button>
+          </div>
         </div>
       </div>
 
@@ -172,7 +189,7 @@
         <div id="recent-rows"></div>
       </div>
 
-      <p class="note">Scan the tag's barcode first — the photo gets named<br>automatically. Nothing to type, ever.</p>
+      <p class="note">Enter the barcode first (typing or your hardware scanner) —<br>we confirm it's in stock, then the camera opens.</p>
     </div>
 
     <!-- BULK / EXISTING PHOTOS TAB -->
@@ -202,12 +219,11 @@
   </div>
 </div>
 
-<script src="https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js"></script>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { getDatabase, ref, update } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+import { getDatabase, ref, update, get } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -242,7 +258,7 @@ onAuthStateChanged(auth, user => {
   document.getElementById('login-card').style.display = user ? 'none' : 'block';
   document.getElementById('app-view').style.display = user ? 'block' : 'none';
   if (user) document.getElementById('whoami').textContent = user.email;
-  else stopScanning();
+  else resetCapture();
 });
 
 // ---------- Tabs ----------
@@ -253,7 +269,50 @@ function switchTab(name){
   document.getElementById('tab-bulk-btn').classList.toggle('active', name==='bulk');
   document.getElementById('tab-scan').classList.toggle('active', name==='scan');
   document.getElementById('tab-bulk').classList.toggle('active', name==='bulk');
-  if (name !== 'scan') stopScanning();
+  if (name !== 'scan') resetCapture();
+}
+
+// ---------- Stock check against the main Suhag Price Checker data ----------
+// Same Firebase project — reads jewelryData/products for existence and
+// replicates that app's getSoldBarcodesForStock() logic (bill/invoice items,
+// productDataImportedAt cutoff for barcode-reuse safety, minus returns) to
+// decide whether a barcode is still physically in stock.
+async function checkBarcodeInStock(barcode){
+  const bc = barcode.trim().toUpperCase();
+
+  const prodSnap = await get(ref(db, 'jewelryData/products/' + bc));
+  if (!prodSnap.exists()) return { ok: false, reason: 'Barcode not found in product catalog.' };
+
+  const [cutoffSnap, billSnap, invSnap, returnedSnap] = await Promise.all([
+    get(ref(db, 'jewelryData/productDataImportedAt')),
+    get(ref(db, 'jewelryData/billHistory')),
+    get(ref(db, 'jewelryData/invoiceHistory')),
+    get(ref(db, 'jewelryData/returnedBarcodes')),
+  ]);
+  const cutoff = cutoffSnap.exists() ? cutoffSnap.val() : 0;
+
+  let sold = false;
+  Object.values(billSnap.val() || {}).forEach(bill => {
+    if (!bill) return;
+    const ts = bill.timestamp ? new Date(bill.timestamp).getTime() : 0;
+    if (ts < cutoff) return;
+    (bill.items || []).forEach(item => {
+      if (item && item.barcode && String(item.barcode).trim().toUpperCase() === bc) sold = true;
+    });
+  });
+  Object.values(invSnap.val() || {}).forEach(inv => {
+    if (!inv || inv.draft) return;
+    const ts = inv.timestamp ? new Date(inv.timestamp).getTime() : 0;
+    if (ts < cutoff) return;
+    (inv.items || []).forEach(item => {
+      if (item && item.barcode && String(item.barcode).trim().toUpperCase() === bc) sold = true;
+    });
+  });
+  const returnedVal = returnedSnap.val() || {};
+  if (Object.keys(returnedVal).some(k => k.toUpperCase() === bc)) sold = false;
+
+  if (sold) return { ok: false, reason: 'This barcode has already been sold.' };
+  return { ok: true };
 }
 
 // ---------- Shared: compress + upload one photo for a barcode ----------
@@ -290,75 +349,86 @@ function addRecentRow(barcode, ok){
   document.getElementById('recent-rows').prepend(row);
 }
 
-// ---------- Scan & Shoot ----------
-let codeReader = null;
-let scannedBarcode = null;
+// ---------- Upload Product: barcode entry -> stock confirm -> photo capture ----------
+let confirmedBarcode = null;
 let videoStream = null;
 
-document.getElementById('scan-start-btn').addEventListener('click', startScanning);
-document.getElementById('scan-stop-btn').addEventListener('click', stopScanning);
-document.getElementById('rescan-btn').addEventListener('click', () => {
-  document.getElementById('scan-result').classList.remove('show');
-  scannedBarcode = null;
-  resumeDecoding();
+const barcodeInput = document.getElementById('barcode-input');
+const barcodeStatus = document.getElementById('barcode-status');
+
+document.getElementById('upload-product-btn').addEventListener('click', showBarcodeForm);
+document.getElementById('barcode-cancel-btn').addEventListener('click', resetCapture);
+document.getElementById('rescan-btn').addEventListener('click', showBarcodeForm);
+document.getElementById('barcode-confirm-btn').addEventListener('click', confirmBarcode);
+barcodeInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); confirmBarcode(); }
 });
 document.getElementById('shoot-btn').addEventListener('click', captureAndUpload);
 
-async function startScanning(){
-  const video = document.getElementById('scan-video');
-  document.getElementById('scan-placeholder').style.display = 'none';
-  video.style.display = 'block';
-  document.getElementById('scan-frame').style.display = 'block';
-  document.getElementById('scan-hint').style.display = 'block';
-  document.getElementById('scan-start-btn').style.display = 'none';
-  document.getElementById('scan-stop-btn').style.display = 'block';
+function showBarcodeForm(){
+  if (videoStream) { videoStream.getTracks().forEach(t => t.stop()); videoStream = null; }
+  document.getElementById('barcode-entry').style.display = 'none';
+  document.getElementById('capture-section').style.display = 'none';
+  document.getElementById('barcode-form').style.display = 'block';
+  barcodeStatus.style.display = 'none';
+  barcodeInput.value = '';
+  confirmedBarcode = null;
+  setTimeout(() => barcodeInput.focus(), 50);
+}
 
-  codeReader = new ZXing.BrowserMultiFormatReader();
+function resetCapture(){
+  if (videoStream) { videoStream.getTracks().forEach(t => t.stop()); videoStream = null; }
+  document.getElementById('capture-section').style.display = 'none';
+  document.getElementById('barcode-form').style.display = 'none';
+  document.getElementById('barcode-entry').style.display = 'block';
+  confirmedBarcode = null;
+}
+
+async function confirmBarcode(){
+  const raw = barcodeInput.value.trim();
+  if (!raw) return;
+  const btn = document.getElementById('barcode-confirm-btn');
+  btn.disabled = true;
+  barcodeStatus.style.display = 'block';
+  barcodeStatus.className = 'note';
+  barcodeStatus.textContent = 'Checking stock…';
   try {
-    // Explicitly request camera access first so the browser actually shows
-    // the permission prompt (listVideoInputDevices alone doesn't reliably
-    // trigger it on some Android/Chrome versions).
-    const primer = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-    primer.getTracks().forEach(t => t.stop());
-
-    const devices = await codeReader.listVideoInputDevices();
-    const rear = devices.find(d => /back|rear|environment/i.test(d.label)) || devices[devices.length - 1];
-    codeReader.decodeFromVideoDevice(rear ? rear.deviceId : undefined, video, (result, err) => {
-      if (result && !scannedBarcode) onBarcodeScanned(result.getText());
-    });
+    const result = await checkBarcodeInStock(raw);
+    if (!result.ok) {
+      barcodeStatus.className = 'note error';
+      barcodeStatus.textContent = result.reason;
+      btn.disabled = false;
+      return;
+    }
+    confirmedBarcode = raw.trim().toUpperCase();
+    btn.disabled = false;
+    await openCameraForCapture();
   } catch (e) {
     console.error(e);
-    alert('Could not access the camera (' + (e.name || e.message) + '). Check camera permission for this site in your browser settings.');
-    stopScanning();
+    barcodeStatus.className = 'note error';
+    barcodeStatus.textContent = 'Could not check stock — try again.';
+    btn.disabled = false;
   }
 }
 
-function resumeDecoding(){
-  // codeReader keeps running in the background; just clear the flag so the
-  // next successful decode is accepted again.
-}
-
-function stopScanning(){
-  if (codeReader) { try { codeReader.reset(); } catch(e){} codeReader = null; }
-  scannedBarcode = null;
-  document.getElementById('scan-video').style.display = 'none';
-  document.getElementById('scan-frame').style.display = 'none';
-  document.getElementById('scan-hint').style.display = 'none';
-  document.getElementById('scan-placeholder').style.display = 'block';
-  document.getElementById('scan-start-btn').style.display = 'block';
-  document.getElementById('scan-stop-btn').style.display = 'none';
-  document.getElementById('scan-result').classList.remove('show');
-}
-
-function onBarcodeScanned(text){
-  scannedBarcode = text.trim().toUpperCase();
-  document.getElementById('scanned-barcode').textContent = scannedBarcode;
-  document.getElementById('scan-result').classList.add('show');
+async function openCameraForCapture(){
+  document.getElementById('barcode-form').style.display = 'none';
+  document.getElementById('capture-section').style.display = 'block';
+  document.getElementById('confirmed-barcode-label').textContent = 'Barcode: ' + confirmedBarcode;
+  const video = document.getElementById('scan-video');
+  try {
+    videoStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+    video.srcObject = videoStream;
+  } catch (e) {
+    console.error(e);
+    alert('Could not access the camera (' + (e.name || e.message) + '). Check camera permission for this site in your browser settings.');
+    resetCapture();
+  }
 }
 
 async function captureAndUpload(){
-  if (!scannedBarcode) return;
-  const barcode = scannedBarcode;
+  if (!confirmedBarcode || !videoStream) return;
+  const barcode = confirmedBarcode;
   const btn = document.getElementById('shoot-btn');
   btn.disabled = true; btn.textContent = 'Uploading…';
   try{
@@ -372,9 +442,7 @@ async function captureAndUpload(){
     addRecentRow(barcode, false);
   }
   btn.disabled = false; btn.textContent = '📸 Capture & Upload';
-  document.getElementById('scan-result').classList.remove('show');
-  scannedBarcode = null;
-  // camera + scanning loop is still running — ready for the next tag immediately
+  resetCapture();
 }
 
 // ---------- Bulk / existing photos (unchanged from before) ----------
