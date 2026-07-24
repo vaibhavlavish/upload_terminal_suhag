@@ -200,6 +200,15 @@
   .home-banner-row .cat{flex:1; font-size:13px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
   .home-banner-row-actions{display:flex; align-items:center; gap:4px;}
 
+  /* ---------- Google Reviews management ---------- */
+  .review-mgmt-text{ font-size:12.5px; color:var(--ink); margin:2px 0 0; max-width:280px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .review-mgmt-stars{ color:var(--gold); letter-spacing:1px; font-size:12px; }
+  .hide-toggle-btn{
+    border-radius:6px; font-size:12px; font-weight:700; padding:5px 10px; cursor:pointer; border:1px solid;
+  }
+  .hide-toggle-btn.is-visible{ background:#E8F3EC; border-color:#B9DCC4; color:#1F5C43; }
+  .hide-toggle-btn.is-hidden{ background:#F7EAEA; border-color:#E6C6C6; color:var(--err); }
+
   .home-add-card{background:#fff; border:1px solid #EEE3CC; border-radius:12px; padding:14px; margin-bottom:16px;}
   .home-add-card .field{margin-bottom:12px;}
   .home-add-card label{display:block; font-size:12px; font-weight:600; margin-bottom:5px;}
@@ -245,6 +254,7 @@
       <div class="tab-btn" id="tab-bulk-btn">📁 Existing Photos</div>
       <div class="tab-btn" id="tab-link-btn">🔗 Link Items</div>
       <div class="tab-btn" id="tab-home-btn">🏠 Home Page</div>
+      <div class="tab-btn" id="tab-reviews-btn">⭐ Reviews</div>
       <div class="tab-btn" id="tab-manage-btn">🗑 Manage</div>
     </div>
 
@@ -375,6 +385,13 @@
       <p class="note">These are the attractive lead images customers see first when they open the catalogue. Tapping one takes them straight into whichever category — or specific item — you pick above. Categories are pulled from what's actually live in the catalogue right now, so upload &amp; link your stock first if a category you expect isn't listed yet.</p>
     </div>
 
+    <!-- REVIEWS TAB (hide unwanted Google reviews from the catalogue) -->
+    <div class="tab-pane" id="tab-reviews">
+      <p class="note" style="margin-top:0;">These are whatever Google is currently showing for your listing — Google picks which ones (up to 5), not you, but you can hide any of them from the catalogue below. Hiding here never touches the review on Google itself, only whether it shows on your site.</p>
+      <p class="manage-status" id="reviews-mgmt-status">Loading…</p>
+      <div class="home-banner-list" id="reviews-mgmt-list"></div>
+    </div>
+
     <!-- MANAGE TAB (delete existing catalogue photos) -->
     <div class="tab-pane" id="tab-manage">
       <div class="manage-search">
@@ -452,19 +469,23 @@ document.getElementById('tab-scan-btn').addEventListener('click', () => switchTa
 document.getElementById('tab-bulk-btn').addEventListener('click', () => switchTab('bulk'));
 document.getElementById('tab-link-btn').addEventListener('click', () => switchTab('link'));
 document.getElementById('tab-home-btn').addEventListener('click', () => switchTab('home'));
+document.getElementById('tab-reviews-btn').addEventListener('click', () => switchTab('reviews'));
 document.getElementById('tab-manage-btn').addEventListener('click', () => switchTab('manage'));
 function switchTab(name){
   document.getElementById('tab-scan-btn').classList.toggle('active', name==='scan');
   document.getElementById('tab-bulk-btn').classList.toggle('active', name==='bulk');
   document.getElementById('tab-link-btn').classList.toggle('active', name==='link');
   document.getElementById('tab-home-btn').classList.toggle('active', name==='home');
+  document.getElementById('tab-reviews-btn').classList.toggle('active', name==='reviews');
   document.getElementById('tab-manage-btn').classList.toggle('active', name==='manage');
   document.getElementById('tab-scan').classList.toggle('active', name==='scan');
   document.getElementById('tab-bulk').classList.toggle('active', name==='bulk');
   document.getElementById('tab-link').classList.toggle('active', name==='link');
   document.getElementById('tab-home').classList.toggle('active', name==='home');
+  document.getElementById('tab-reviews').classList.toggle('active', name==='reviews');
   document.getElementById('tab-manage').classList.toggle('active', name==='manage');
   if (name === 'home') { loadHomeCategories(); loadHomeBanners(); }
+  if (name === 'reviews') loadGoogleReviewsForManagement();
   if (name !== 'scan') resetCapture();
 }
 
@@ -1132,6 +1153,110 @@ document.getElementById('home-add-btn').addEventListener('click', async () => {
   }
   btn.disabled = false; btn.textContent = '+ Add Banner';
 });
+
+// ---------- Google Reviews management: hide unwanted ones from the catalogue ----------
+// Same key/Place ID as the public catalogue page — this just needs read
+// access to Google's Places API, same as there.
+const GOOGLE_MAPS_API_KEY_RV = 'AIzaSyCBfJRhcD8Oas3gAX_mm1QQFQRrWiU_0So';
+const GOOGLE_PLACE_ID_RV = 'ChIJoSJ1hJnt4DsRPnyWFI1nR4A';
+
+let googleMapsScriptLoading = null;
+function ensureGoogleMapsLoaded(){
+  if (window.google && window.google.maps && window.google.maps.places) return Promise.resolve();
+  if (googleMapsScriptLoading) return googleMapsScriptLoading;
+  googleMapsScriptLoading = new Promise((resolve, reject) => {
+    window.__initReviewsMgmt = resolve;
+    const script = document.createElement('script');
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY_RV}&libraries=places&callback=__initReviewsMgmt`;
+    script.async = true;
+    script.onerror = reject;
+    document.head.appendChild(script);
+  });
+  return googleMapsScriptLoading;
+}
+
+function reviewMgmtStars(n){
+  return '★★★★★☆☆☆☆☆'.slice(5 - n, 10 - n);
+}
+
+async function loadGoogleReviewsForManagement(){
+  const statusEl = document.getElementById('reviews-mgmt-status');
+  const listEl = document.getElementById('reviews-mgmt-list');
+  statusEl.textContent = 'Loading…';
+  listEl.innerHTML = '';
+
+  try {
+    await ensureGoogleMapsLoaded();
+    const service = new google.maps.places.PlacesService(document.createElement('div'));
+    service.getDetails(
+      { placeId: GOOGLE_PLACE_ID_RV, fields: ['reviews'] },
+      async (place, status) => {
+        if (status !== google.maps.places.PlacesServiceStatus.OK || !place) {
+          statusEl.textContent = 'Could not load reviews from Google right now.';
+          return;
+        }
+        const reviews = place.reviews || [];
+        if (!reviews.length) {
+          statusEl.textContent = 'Google isn\'t showing any reviews for this listing right now.';
+          return;
+        }
+        let hiddenSnap;
+        try { hiddenSnap = await get(ref(db, 'catalogue/hiddenGoogleReviews')); }
+        catch (e) { console.error(e); }
+        const hidden = (hiddenSnap && hiddenSnap.val()) || {};
+
+        statusEl.textContent = '';
+        listEl.innerHTML = reviews.map(r => {
+          const isHidden = !!hidden[String(r.time)];
+          return `
+            <div class="home-banner-row" data-time="${r.time}">
+              <div class="thumb"><img src="${r.profile_photo_url || ''}" alt=""></div>
+              <div style="flex:1; min-width:0;">
+                <span class="cat" style="display:block;">${escapeHtmlUT2(r.author_name || 'Google user')} · <span class="review-mgmt-stars">${reviewMgmtStars(r.rating || 0)}</span></span>
+                <p class="review-mgmt-text">${escapeHtmlUT2(r.text || '')}</p>
+              </div>
+              <span class="home-banner-row-actions">
+                <button class="hide-toggle-btn ${isHidden ? 'is-hidden' : 'is-visible'}" data-time="${r.time}">
+                  ${isHidden ? '🚫 Hidden — tap to show' : '✓ Visible — tap to hide'}
+                </button>
+              </span>
+            </div>`;
+        }).join('');
+
+        listEl.querySelectorAll('.hide-toggle-btn').forEach(btn => {
+          btn.addEventListener('click', () => toggleReviewHidden(btn));
+        });
+      }
+    );
+  } catch (e) {
+    console.error(e);
+    statusEl.textContent = 'Could not load Google Maps right now — try again.';
+  }
+}
+
+function escapeHtmlUT2(s){
+  const div = document.createElement('div');
+  div.textContent = s;
+  return div.innerHTML;
+}
+
+async function toggleReviewHidden(btn){
+  const time = btn.dataset.time;
+  const currentlyHidden = btn.classList.contains('is-hidden');
+  btn.disabled = true;
+  try {
+    await update(ref(db, '/'), {
+      ['catalogue/hiddenGoogleReviews/' + time]: currentlyHidden ? null : true,
+    });
+    btn.classList.toggle('is-hidden', !currentlyHidden);
+    btn.classList.toggle('is-visible', currentlyHidden);
+    btn.textContent = currentlyHidden ? '✓ Visible — tap to hide' : '🚫 Hidden — tap to show';
+  } catch (e) {
+    console.error(e);
+    alert('Could not update — try again.');
+  }
+  btn.disabled = false;
+}
 
 // ---------- Manage: view & delete existing catalogue photos for a barcode ----------
 // Handles two data shapes that exist in the DB:
