@@ -345,6 +345,7 @@
       <div class="home-add-card">
         <div class="field">
           <label>Banner image</label>
+          <button class="btn secondary" id="home-banner-pick-btn" type="button">Choose Photo</button>
           <input type="file" id="home-banner-file" accept="image/*">
         </div>
         <div class="home-add-preview" id="home-add-preview">
@@ -563,10 +564,13 @@ async function uploadForBarcode(barcode, blob){
 
 // Compresses to a target file-size ceiling rather than a fixed quality
 // number — actual output size depends heavily on the photo's own detail,
-// so this starts high-quality and steps quality down only if needed, aiming
-// for a max of ~450KB (a step up in resolution from before, for sharper
-// zoomed-in detail on the catalogue and Manage-tab thumbnails).
-const TARGET_MAX_BYTES = 450 * 1024; // ~450KB ceiling (~400-500KB target range)
+// so this starts high-quality and steps quality down only if needed.
+// Product/tag photos aim for ~450KB (sharper zoomed-in detail on the
+// catalogue and Manage-tab thumbnails); home page banners aim lower, ~400KB,
+// since those load on the very first screen a customer sees and there can
+// be several of them on one page, so faster load matters more there.
+const TARGET_MAX_BYTES = 450 * 1024;        // ~450KB ceiling for product/tag photos
+const BANNER_TARGET_MAX_BYTES = 400 * 1024; // ~400KB ceiling for home page banners
 
 function canvasToBlobAt(canvas, quality){
   return new Promise((resolve, reject) => {
@@ -574,10 +578,11 @@ function canvasToBlobAt(canvas, quality){
   });
 }
 
-async function compressCanvasToTarget(canvas){
+async function compressCanvasToTarget(canvas, targetBytes){
+  targetBytes = targetBytes || TARGET_MAX_BYTES;
   let quality = 0.9;
   let blob = await canvasToBlobAt(canvas, quality);
-  while (blob.size > TARGET_MAX_BYTES && quality > 0.5) {
+  while (blob.size > targetBytes && quality > 0.5) {
     quality -= 0.08;
     blob = await canvasToBlobAt(canvas, quality);
   }
@@ -759,13 +764,13 @@ function renderQueue(){
   `).join('');
 }
 
-function compressImageFile(file){
+function compressImageFile(file, targetBytes){
   return new Promise((resolve, reject) => {
     const img = new Image();
     const url = URL.createObjectURL(file);
     img.onload = () => {
       const canvas = resizedCanvasFromImg(img, 1600);
-      compressCanvasToTarget(canvas)
+      compressCanvasToTarget(canvas, targetBytes)
         .then(blob => { URL.revokeObjectURL(url); resolve(blob); })
         .catch(err => { URL.revokeObjectURL(url); reject(err); });
     };
@@ -946,15 +951,19 @@ async function loadHomeCategories(){
   }
 }
 
+document.getElementById('home-banner-pick-btn').addEventListener('click', () => document.getElementById('home-banner-file').click());
+
 // Live preview thumbnail as soon as a file is chosen.
 document.getElementById('home-banner-file').addEventListener('change', e => {
   const file = e.target.files[0];
   const thumb = document.getElementById('home-add-thumb');
   const placeholder = document.getElementById('home-add-placeholder');
-  if (!file) { thumb.innerHTML = ''; placeholder.style.display = 'block'; return; }
+  const pickBtn = document.getElementById('home-banner-pick-btn');
+  if (!file) { thumb.innerHTML = ''; placeholder.style.display = 'block'; pickBtn.textContent = 'Choose Photo'; return; }
   const url = URL.createObjectURL(file);
   thumb.innerHTML = `<img src="${url}" alt="">`;
   placeholder.style.display = 'none';
+  pickBtn.textContent = '✓ ' + file.name;
 });
 
 async function loadHomeBanners(){
@@ -1040,7 +1049,7 @@ document.getElementById('home-add-btn').addEventListener('click', async () => {
   btn.disabled = true; btn.textContent = 'Uploading…';
   statusEl.textContent = '';
   try {
-    const blob = await compressImageFile(file);
+    const blob = await compressImageFile(file, BANNER_TARGET_MAX_BYTES);
     const bannerId = Date.now() + '_' + Math.random().toString(36).slice(2, 8);
     const storagePath = 'homeBannerImages/' + bannerId + '.jpg';
     const sRef = storageRef(storage, storagePath);
@@ -1052,6 +1061,7 @@ document.getElementById('home-add-btn').addEventListener('click', async () => {
     fileInput.value = '';
     document.getElementById('home-add-thumb').innerHTML = '';
     document.getElementById('home-add-placeholder').style.display = 'block';
+    document.getElementById('home-banner-pick-btn').textContent = 'Choose Photo';
     loadHomeBanners();
   } catch (e) {
     console.error(e);
