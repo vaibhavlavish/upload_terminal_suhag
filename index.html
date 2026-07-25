@@ -45,6 +45,13 @@
   .common-price-box{
     background:#FBF6EE; border:1px solid #EEE3CC; border-radius:12px; padding:14px; margin-top:16px;
   }
+  .tag-reference-line{
+    font-size:12.5px; color:var(--ink-soft); background:#F7F2E7; border-radius:8px;
+    padding:8px 12px; margin:0 0 12px;
+  }
+  .tag-reference-line b{ color:var(--ink); }
+  .existing-row-clickable{ cursor:pointer; }
+  .existing-row-clickable:active{ background:#FBF6EE; }
   .btn{
     width:100%; border:none; border-radius:10px; padding:12px 0;
     background:var(--oxblood); color:var(--gold-soft); font-weight:700; font-size:14px;
@@ -343,6 +350,9 @@
       </div>
       <p class="link-status" id="link-status"></p>
 
+      <p class="section-label" id="link-existing-label" style="display:none; margin-top:4px;">Already Linked Groups</p>
+      <div class="home-banner-list" id="link-existing-list"></div>
+
       <div class="link-group" id="link-group">
         <div class="link-preview">
           <div class="thumb" id="link-thumb"></div>
@@ -433,7 +443,35 @@
     <div class="tab-pane" id="tab-desc">
       <p class="note" style="margin-top:0;">Group details apply to the whole photo/group (a barcode with photos, or a linked set). Tag-specific notes apply to one exact tag only — useful when a linked group's pieces differ slightly.</p>
 
-      <p class="section-label">Group Details</p>
+      <p class="section-label">Tag-Specific Description</p>
+      <div class="link-search">
+        <input type="text" id="desc-tag-barcode-input" autocomplete="off" placeholder="Enter the exact tag (e.g. GCH2)">
+        <button class="btn" id="desc-tag-load-btn">Load</button>
+      </div>
+      <p class="manage-status" id="desc-tag-status"></p>
+
+      <div id="desc-tag-fields" style="display:none;">
+        <p class="tag-reference-line" id="desc-tag-reference"></p>
+        <div class="field" style="display:flex; align-items:center; gap:8px;">
+          <input type="checkbox" id="desc-tag-show-weight" style="width:auto;">
+          <label for="desc-tag-show-weight" style="margin:0;">Show this tag's weight on the catalogue</label>
+        </div>
+        <div class="field">
+          <label>Purity for this tag (overrides the group's, e.g. 22K, 925)</label>
+          <input type="text" id="desc-tag-purity" autocomplete="off" placeholder="Leave blank to use the group's purity">
+        </div>
+        <div class="field">
+          <label>Description for this tag</label>
+          <textarea id="desc-tag-text" rows="3" style="width:100%; padding:10px 12px; border:1.5px solid #E6DCCB; border-radius:9px; font-size:14px; font-family:'Work Sans',sans-serif;"></textarea>
+        </div>
+        <button class="btn" id="desc-tag-save-btn">Save Tag Description</button>
+        <p class="link-status" id="desc-tag-save-status"></p>
+      </div>
+
+      <p class="section-label" style="margin-top:10px;">Already Written</p>
+      <div class="home-banner-list" id="desc-tag-existing-list"></div>
+
+      <p class="section-label" style="margin-top:26px;">Group Details</p>
       <div class="link-search">
         <input type="text" id="desc-group-barcode-input" autocomplete="off" placeholder="Enter the barcode with photos already uploaded">
         <button class="btn" id="desc-group-load-btn">Load</button>
@@ -457,21 +495,8 @@
         <p class="link-status" id="desc-group-save-status"></p>
       </div>
 
-      <p class="section-label" style="margin-top:26px;">Tag-Specific Description</p>
-      <div class="link-search">
-        <input type="text" id="desc-tag-barcode-input" autocomplete="off" placeholder="Enter the exact tag (e.g. GCH2)">
-        <button class="btn" id="desc-tag-load-btn">Load</button>
-      </div>
-      <p class="manage-status" id="desc-tag-status"></p>
-
-      <div id="desc-tag-fields" style="display:none;">
-        <div class="field">
-          <label>Description for this tag</label>
-          <textarea id="desc-tag-text" rows="3" style="width:100%; padding:10px 12px; border:1.5px solid #E6DCCB; border-radius:9px; font-size:14px; font-family:'Work Sans',sans-serif;"></textarea>
-        </div>
-        <button class="btn" id="desc-tag-save-btn">Save Tag Description</button>
-        <p class="link-status" id="desc-tag-save-status"></p>
-      </div>
+      <p class="section-label" style="margin-top:10px;">Already Set</p>
+      <div class="home-banner-list" id="desc-group-existing-list"></div>
     </div>
 
     <!-- MANAGE TAB (delete existing catalogue photos) -->
@@ -571,6 +596,8 @@ function switchTab(name){
   document.getElementById('tab-manage').classList.toggle('active', name==='manage');
   if (name === 'home') { loadHomeCategories(); loadHomeBanners(); }
   if (name === 'reviews') loadGoogleReviewsForManagement();
+  if (name === 'desc') { loadExistingTagDescriptions(); loadExistingGroupDetails(); }
+  if (name === 'link') loadExistingLinkedGroups();
   if (name !== 'scan') resetCapture();
 }
 
@@ -1022,9 +1049,44 @@ function renderLinkList(){
 async function saveLinkedList(){
   try {
     await update(ref(db, '/'), { ['catalogue/items/' + currentLinkBarcode + '/linkedBarcodes']: currentLinkedList });
+    loadExistingLinkedGroups();
   } catch (e) {
     console.error(e);
     document.getElementById('link-status').textContent = 'Could not save — try again.';
+  }
+}
+
+// Shows every barcode that's already part of an actual linked group (more
+// than just itself), so you can jump back in to reorder/add/remove tags
+// without needing to remember which barcode it was filed under.
+async function loadExistingLinkedGroups(){
+  const listEl = document.getElementById('link-existing-list');
+  const labelEl = document.getElementById('link-existing-label');
+  try {
+    const snap = await get(ref(db, 'catalogue/items'));
+    const val = snap.val() || {};
+    const bcs = Object.keys(val).filter(bc => Array.isArray(val[bc].linkedBarcodes) && val[bc].linkedBarcodes.length > 1);
+    if (!bcs.length) {
+      labelEl.style.display = 'none';
+      listEl.innerHTML = '';
+      return;
+    }
+    labelEl.style.display = 'block';
+    listEl.innerHTML = bcs.sort().map(bc => `
+      <div class="home-banner-row existing-row-clickable" data-bc="${bc}">
+        <span class="cat" style="flex:1;">${bc}</span>
+        <p class="review-row-text" style="max-width:220px;">${val[bc].linkedBarcodes.join(', ')}</p>
+      </div>
+    `).join('');
+    listEl.querySelectorAll('.existing-row-clickable').forEach(row => {
+      row.addEventListener('click', () => {
+        document.getElementById('link-barcode-input').value = row.dataset.bc;
+        loadLinkGroup();
+      });
+    });
+  } catch (e) {
+    console.error(e);
+    listEl.innerHTML = '';
   }
 }
 
@@ -1435,6 +1497,7 @@ document.getElementById('desc-group-save-btn').addEventListener('click', async (
     });
     statusEl.textContent = 'Saved!';
     setTimeout(() => { statusEl.textContent = ''; }, 2000);
+    loadExistingGroupDetails();
   } catch (e) {
     console.error(e);
     statusEl.textContent = 'Could not save — try again.';
@@ -1448,19 +1511,45 @@ document.getElementById('desc-tag-barcode-input').addEventListener('keydown', e 
 
 let currentDescTag = null;
 
+// Older saved tag descriptions are a plain string; newer ones are an object
+// with weight/purity overrides too. This normalizes either into one shape.
+function normalizeTagDesc(raw){
+  if (!raw) return { text: '', showWeight: false, purity: '' };
+  if (typeof raw === 'string') return { text: raw, showWeight: false, purity: '' };
+  return { text: raw.text || '', showWeight: !!raw.showWeight, purity: raw.purity || '' };
+}
+
 async function loadTagDescription(){
   const input = document.getElementById('desc-tag-barcode-input');
   const tag = input.value.trim().toUpperCase();
   const statusEl = document.getElementById('desc-tag-status');
   const fieldsEl = document.getElementById('desc-tag-fields');
+  const refEl = document.getElementById('desc-tag-reference');
   fieldsEl.style.display = 'none';
   if (!tag) { statusEl.textContent = 'Enter a tag first.'; return; }
 
   statusEl.textContent = 'Loading…';
   try {
-    const snap = await get(ref(db, 'catalogue/tagDescriptions/' + tag));
+    const [descSnap, productSnap] = await Promise.all([
+      get(ref(db, 'catalogue/tagDescriptions/' + tag)),
+      get(ref(db, 'jewelryData/products/' + tag)),
+    ]);
     currentDescTag = tag;
-    document.getElementById('desc-tag-text').value = snap.val() || '';
+    const desc = normalizeTagDesc(descSnap.val());
+    document.getElementById('desc-tag-text').value = desc.text;
+    document.getElementById('desc-tag-show-weight').checked = desc.showWeight;
+    document.getElementById('desc-tag-purity').value = desc.purity;
+
+    const product = productSnap.val();
+    if (product) {
+      const bits = [];
+      if (product.stamp) bits.push(`Purity: <b>${product.stamp}</b>`);
+      if (typeof product.netWeight === 'number' && product.netWeight > 0) bits.push(`Weight: <b>${product.netWeight}g</b>`);
+      refEl.innerHTML = bits.length ? bits.join(' &middot; ') : 'No weight/purity on record for this tag in stock.';
+    } else {
+      refEl.innerHTML = 'This tag was not found in the current stock list.';
+    }
+
     statusEl.textContent = '';
     fieldsEl.style.display = 'block';
   } catch (e) {
@@ -1473,19 +1562,95 @@ document.getElementById('desc-tag-save-btn').addEventListener('click', async () 
   if (!currentDescTag) return;
   const statusEl = document.getElementById('desc-tag-save-status');
   const text = document.getElementById('desc-tag-text').value.trim();
+  const showWeight = document.getElementById('desc-tag-show-weight').checked;
+  const purity = document.getElementById('desc-tag-purity').value.trim();
 
   statusEl.textContent = 'Saving…';
   try {
+    const hasAnything = text || showWeight || purity;
     await update(ref(db, '/'), {
-      ['catalogue/tagDescriptions/' + currentDescTag]: text || null,
+      ['catalogue/tagDescriptions/' + currentDescTag]: hasAnything ? { text, showWeight, purity } : null,
     });
     statusEl.textContent = 'Saved!';
     setTimeout(() => { statusEl.textContent = ''; }, 2000);
+    loadExistingTagDescriptions();
   } catch (e) {
     console.error(e);
     statusEl.textContent = 'Could not save — try again.';
   }
 });
+
+// Shows every tag that already has a description written, so you can jump
+// back into editing one without having to remember/retype its barcode.
+async function loadExistingTagDescriptions(){
+  const listEl = document.getElementById('desc-tag-existing-list');
+  listEl.innerHTML = '<div class="home-banner-row"><span class="cat" style="color:var(--ink-soft); font-weight:400;">Loading…</span></div>';
+  try {
+    const snap = await get(ref(db, 'catalogue/tagDescriptions'));
+    const val = snap.val() || {};
+    const tags = Object.keys(val).filter(t => val[t]);
+    if (!tags.length) {
+      listEl.innerHTML = '<div class="home-banner-row"><span class="cat" style="color:var(--ink-soft); font-weight:400;">No tag descriptions written yet.</span></div>';
+      return;
+    }
+
+    listEl.innerHTML = tags.sort().map(t => {
+      const d = normalizeTagDesc(val[t]);
+      const bits = [d.purity, d.showWeight ? 'weight shown' : null].filter(Boolean);
+      const summary = d.text ? d.text : (bits.length ? '' : '(no note — only weight/purity set)');
+      return `
+        <div class="home-banner-row existing-row-clickable" data-tag="${t}">
+          <span class="cat" style="flex:1;">${t}${bits.length ? ` <span style="color:var(--ink-soft); font-weight:400;">— ${bits.join(' · ')}</span>` : ''}</span>
+          <p class="review-row-text" style="max-width:180px;">${summary.replace(/</g, '&lt;')}</p>
+        </div>
+      `;
+    }).join('');
+    listEl.querySelectorAll('.existing-row-clickable').forEach(row => {
+      row.addEventListener('click', () => {
+        document.getElementById('desc-tag-barcode-input').value = row.dataset.tag;
+        loadTagDescription();
+      });
+    });
+  } catch (e) {
+    console.error(e);
+    listEl.innerHTML = '';
+  }
+}
+
+// Shows every group that already has weight/purity/remarks configured,
+// alongside its item name for context.
+async function loadExistingGroupDetails(){
+  const listEl = document.getElementById('desc-group-existing-list');
+  listEl.innerHTML = '<div class="home-banner-row"><span class="cat" style="color:var(--ink-soft); font-weight:400;">Loading…</span></div>';
+  try {
+    const snap = await get(ref(db, 'catalogue/items'));
+    const val = snap.val() || {};
+    const bcs = Object.keys(val).filter(bc => val[bc] && (val[bc].purity || val[bc].groupRemarks || val[bc].showWeight));
+    if (!bcs.length) {
+      listEl.innerHTML = '<div class="home-banner-row"><span class="cat" style="color:var(--ink-soft); font-weight:400;">No group details set yet.</span></div>';
+      return;
+    }
+    listEl.innerHTML = bcs.sort().map(bc => {
+      const n = val[bc];
+      const itemName = n.displayName || bc;
+      const bits = [n.purity, n.showWeight ? 'weight shown' : null].filter(Boolean).join(' · ');
+      return `
+        <div class="home-banner-row existing-row-clickable" data-bc="${bc}">
+          <span class="cat" style="flex:1;">${bc} <span style="color:var(--ink-soft); font-weight:400;">— ${itemName}</span></span>
+          <p class="review-row-text" style="max-width:180px;">${bits}</p>
+        </div>`;
+    }).join('');
+    listEl.querySelectorAll('.existing-row-clickable').forEach(row => {
+      row.addEventListener('click', () => {
+        document.getElementById('desc-group-barcode-input').value = row.dataset.bc;
+        loadGroupDetails();
+      });
+    });
+  } catch (e) {
+    console.error(e);
+    listEl.innerHTML = '';
+  }
+}
 
 // ---------- Manage: view & delete existing catalogue photos for a barcode ----------
 // Handles two data shapes that exist in the DB:
