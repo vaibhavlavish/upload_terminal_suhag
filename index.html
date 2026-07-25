@@ -502,12 +502,11 @@
       <p class="section-label" style="margin-top:26px;">Group Details</p>
 
       <div class="field">
-        <label>Browse by category (optional — helps find the right group when you're not sure of the barcode)</label>
+        <label>Category default (optional — set once, every item in this category inherits it automatically, including ones added later)</label>
         <select id="desc-group-category-filter">
           <option value="">— Select a category —</option>
         </select>
       </div>
-      <div class="home-banner-list" id="desc-group-category-results" style="display:none;"></div>
 
       <div class="link-search">
         <input type="text" id="desc-group-barcode-input" autocomplete="off" placeholder="Or enter the barcode directly">
@@ -1661,13 +1660,13 @@ document.getElementById('desc-group-barcode-input').addEventListener('keydown', 
 let currentDescGroupBarcode = null;
 
 document.getElementById('desc-group-close-btn').addEventListener('click', () => {
+  groupDetailsRequestToken++; // invalidate anything still in flight
   document.getElementById('desc-group-fields').style.display = 'none';
   document.getElementById('desc-group-barcode-input').value = '';
   document.getElementById('desc-group-status').textContent = '';
   document.getElementById('desc-group-category-filter').value = '';
-  document.getElementById('desc-group-category-results').style.display = 'none';
-  document.getElementById('desc-group-category-results').innerHTML = '';
   document.getElementById('desc-group-bulk-apply-btn').style.display = 'none';
+  document.getElementById('desc-group-save-btn').style.display = 'block';
   document.getElementById('desc-group-mode-label').textContent = '';
   currentDescGroupBarcode = null;
   currentCategoryFilterKey = '';
@@ -1682,9 +1681,17 @@ async function loadGroupDetails(){
   fieldsEl.style.display = 'none';
   if (!barcode) { statusEl.textContent = 'Enter a barcode first.'; return; }
 
+  const myToken = ++groupDetailsRequestToken;
+  // Loading a specific barcode always wins over whatever category was
+  // selected — clear that selection so the two modes can't visually mix.
+  currentCategoryFilterKey = '';
+  document.getElementById('desc-group-category-filter').value = '';
+  document.getElementById('desc-group-bulk-apply-btn').style.display = 'none';
+
   statusEl.textContent = 'Loading…';
   try {
     const snap = await get(ref(db, 'catalogue/items/' + barcode));
+    if (myToken !== groupDetailsRequestToken) return; // a newer load started while this was in flight
     const node = snap.val();
     if (!node) {
       statusEl.textContent = 'No photos found for ' + barcode + ' — upload photos for it first.';
@@ -1702,11 +1709,14 @@ async function loadGroupDetails(){
     document.getElementById('desc-purity').value = node.purity || '';
     document.getElementById('desc-group-remarks').value = node.groupRemarks || '';
     await populateSizeChartDropdown(node.sizeChartId || '');
+    if (myToken !== groupDetailsRequestToken) return;
     document.getElementById('desc-group-mode-label').textContent = `Editing barcode: ${barcode} (its own override — separate from any category default)`;
     document.getElementById('desc-group-bulk-apply-btn').style.display = 'none';
+    document.getElementById('desc-group-save-btn').style.display = 'block';
     statusEl.textContent = '';
     fieldsEl.style.display = 'block';
   } catch (e) {
+    if (myToken !== groupDetailsRequestToken) return;
     console.error(e);
     statusEl.textContent = 'Could not load — try again.';
   }
@@ -1755,57 +1765,49 @@ async function loadGroupCategoryFilter(){
 
 let currentCategoryFilterKey = '';
 let currentCategoryFilterCount = 0;
+let groupDetailsRequestToken = 0; // guards against a slow async load finishing after a newer one started
 
 document.getElementById('desc-group-category-filter').addEventListener('change', async () => {
   const key = document.getElementById('desc-group-category-filter').value;
-  const resultsEl = document.getElementById('desc-group-category-results');
   const bulkBtn = document.getElementById('desc-group-bulk-apply-btn');
   const modeLabel = document.getElementById('desc-group-mode-label');
   currentCategoryFilterKey = key;
 
+  const myToken = ++groupDetailsRequestToken;
+
   if (!key) {
-    resultsEl.style.display = 'none'; resultsEl.innerHTML = '';
     bulkBtn.style.display = 'none';
     document.getElementById('desc-group-fields').style.display = 'none';
     return;
   }
 
-  resultsEl.style.display = 'block';
-  resultsEl.innerHTML = '<div class="home-banner-row"><span class="cat" style="color:var(--ink-soft); font-weight:400;">Loading…</span></div>';
+  document.getElementById('desc-group-status').textContent = 'Loading category…';
   try {
+    // Just a count, not a full listing — with hundreds of items in a
+    // category, rendering every single barcode here would make this
+    // unusable. Setting or editing the category default doesn't need to
+    // know which specific barcodes are in it; if you need to set an
+    // exception for one specific item, type its barcode directly below (or
+    // find it in "Individual Item Overrides Already Set" if it already has one).
     const [itemsSnap, categorySnap] = await Promise.all([
       get(ref(db, 'catalogue/items')),
       get(ref(db, 'catalogue/categorySettings/' + key)),
     ]);
+
+    // Something newer (a barcode load, or picking a different category)
+    // started after this one — let that own the screen instead.
+    if (myToken !== groupDetailsRequestToken) return;
+
     const items = itemsSnap.val() || {};
     const matches = Object.keys(items).filter(bc => items[bc] && homeCategoryKey(items[bc].displayName) === key);
     currentCategoryFilterCount = matches.length;
-
-    resultsEl.innerHTML = matches.length
-      ? matches.sort().map(bc => {
-          const node = items[bc];
-          const thumb = node.imageUrl || Object.values(node.images || {})[0]?.imageUrl || '';
-          const hasOwnOverride = node.purity || typeof node.showWeight === 'boolean' || node.groupRemarks || node.sizeChartId || node.nameOverride;
-          return `
-            <div class="home-banner-row existing-row-clickable" data-bc="${bc}">
-              <div class="thumb">${thumb ? `<img src="${thumb}" alt="">` : ''}</div>
-              <span class="cat" style="flex:1;">${bc}${hasOwnOverride ? ' <span style="color:var(--ink-soft); font-weight:400;">— has its own override</span>' : ''}</span>
-            </div>`;
-        }).join('')
-      : '<div class="home-banner-row"><span class="cat" style="color:var(--ink-soft); font-weight:400;">No items currently in this category.</span></div>';
-    resultsEl.querySelectorAll('.existing-row-clickable').forEach(row => {
-      row.addEventListener('click', () => {
-        document.getElementById('desc-group-barcode-input').value = row.dataset.bc;
-        loadGroupDetails();
-      });
-    });
 
     // This loads the CATEGORY's own persistent default — not any specific
     // item's values, and not a blank form. Saving here sets the default
     // every item in this category inherits automatically (including ones
     // added later) unless that item has its own override saved separately
-    // below. Click a specific barcode above (or type one directly) to set
-    // an exception for just that one instead.
+    // below. Type a specific barcode below to set an exception for just
+    // that one instead.
     currentDescGroupBarcode = null;
     const cat = categorySnap.val() || {};
     document.getElementById('desc-group-name-override').value = cat.nameOverride || '';
@@ -1814,14 +1816,18 @@ document.getElementById('desc-group-category-filter').addEventListener('change',
     document.getElementById('desc-purity').value = cat.purity || '';
     document.getElementById('desc-group-remarks').value = cat.groupRemarks || '';
     await populateSizeChartDropdown(cat.sizeChartId || '');
-    document.getElementById('desc-group-status').textContent = '';
+    if (myToken !== groupDetailsRequestToken) return; // check again — populateSizeChartDropdown is also async
+
+    document.getElementById('desc-group-status').textContent = `${matches.length} item${matches.length === 1 ? '' : 's'} currently in "${homeCategoryLabel(key)}".`;
     document.getElementById('desc-group-fields').style.display = 'block';
     modeLabel.textContent = `Editing default for category: ${homeCategoryLabel(key)}`;
+    document.getElementById('desc-group-save-btn').style.display = 'none';
     bulkBtn.style.display = 'block';
     bulkBtn.textContent = `Save as Default for "${homeCategoryLabel(key)}" (${matches.length} item${matches.length === 1 ? '' : 's'} now)`;
   } catch (e) {
+    if (myToken !== groupDetailsRequestToken) return;
     console.error(e);
-    resultsEl.innerHTML = '';
+    document.getElementById('desc-group-status').textContent = 'Could not load category — try again.';
   }
 });
 
@@ -2026,18 +2032,47 @@ async function loadExistingGroupDetails(){
       return `
         <div class="home-banner-row existing-row-clickable" data-bc="${bc}">
           <span class="cat" style="flex:1;">${bc} <span style="color:var(--ink-soft); font-weight:400;">— ${itemName}</span></span>
-          <p class="review-row-text" style="max-width:180px;">${bits}</p>
+          <p class="review-row-text" style="max-width:150px;">${bits}</p>
+          <button class="manage-del-btn" data-bc="${bc}" title="Remove this item's override">🗑</button>
         </div>`;
     }).join('');
     listEl.querySelectorAll('.existing-row-clickable').forEach(row => {
-      row.addEventListener('click', () => {
+      row.addEventListener('click', e => {
+        if (e.target.closest('.manage-del-btn')) return; // let the delete button handle its own click
         document.getElementById('desc-group-barcode-input').value = row.dataset.bc;
         loadGroupDetails();
+      });
+    });
+    listEl.querySelectorAll('.manage-del-btn').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        deleteItemOverride(btn.dataset.bc);
       });
     });
   } catch (e) {
     console.error(e);
     listEl.innerHTML = '';
+  }
+}
+
+async function deleteItemOverride(bc){
+  if (!confirm(`Remove ${bc}'s own override? It'll go back to inheriting purely from its category's default (if one is set) or the plain stock name/no purity/etc.`)) return;
+  try {
+    await update(ref(db, '/'), {
+      ['catalogue/items/' + bc + '/nameOverride']: null,
+      ['catalogue/items/' + bc + '/showWeight']: null,
+      ['catalogue/items/' + bc + '/purity']: null,
+      ['catalogue/items/' + bc + '/groupRemarks']: null,
+      ['catalogue/items/' + bc + '/sizeChartId']: null,
+    });
+    // If this exact barcode happens to be open in the form right now, clear it there too.
+    if (currentDescGroupBarcode === bc) {
+      document.getElementById('desc-group-close-btn').click();
+    }
+    loadExistingGroupDetails();
+  } catch (e) {
+    console.error(e);
+    alert('Could not remove — try again.');
   }
 }
 
@@ -2061,18 +2096,40 @@ async function loadExistingCategoryDefaults(){
       return `
         <div class="home-banner-row existing-row-clickable" data-key="${k}">
           <span class="cat" style="flex:1;">${homeCategoryLabel(k)}</span>
-          <p class="review-row-text" style="max-width:180px;">${bits}</p>
+          <p class="review-row-text" style="max-width:150px;">${bits}</p>
+          <button class="manage-del-btn" data-key="${k}" title="Remove this category's default">🗑</button>
         </div>`;
     }).join('');
     listEl.querySelectorAll('.existing-row-clickable').forEach(row => {
-      row.addEventListener('click', () => {
+      row.addEventListener('click', e => {
+        if (e.target.closest('.manage-del-btn')) return;
         document.getElementById('desc-group-category-filter').value = row.dataset.key;
         document.getElementById('desc-group-category-filter').dispatchEvent(new Event('change'));
+      });
+    });
+    listEl.querySelectorAll('.manage-del-btn').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        deleteCategoryDefault(btn.dataset.key);
       });
     });
   } catch (e) {
     console.error(e);
     listEl.innerHTML = '';
+  }
+}
+
+async function deleteCategoryDefault(key){
+  if (!confirm(`Remove the default for "${homeCategoryLabel(key)}"? Items in this category will go back to showing their own individual settings only (or nothing, if they never had their own).`)) return;
+  try {
+    await update(ref(db, '/'), { ['catalogue/categorySettings/' + key]: null });
+    if (currentCategoryFilterKey === key) {
+      document.getElementById('desc-group-close-btn').click();
+    }
+    loadExistingCategoryDefaults();
+  } catch (e) {
+    console.error(e);
+    alert('Could not remove — try again.');
   }
 }
 
