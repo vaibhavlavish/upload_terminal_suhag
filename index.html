@@ -475,6 +475,10 @@
           <button class="close-section-btn" id="desc-tag-close-btn" type="button" title="Close">✕</button>
         </div>
         <p class="tag-reference-line" id="desc-tag-reference"></p>
+        <div class="field">
+          <label>Custom item name for this tag (overrides the group's name, e.g. "Silver Heart Pendant" instead of "Silver Pendant")</label>
+          <input type="text" id="desc-tag-name" autocomplete="off" placeholder="Leave blank to use the group's item name">
+        </div>
         <div class="field" style="display:flex; align-items:center; gap:8px;">
           <input type="checkbox" id="desc-tag-show-weight" style="width:auto;">
           <label for="desc-tag-show-weight" style="margin:0;">Show this tag's weight on the catalogue</label>
@@ -1614,11 +1618,11 @@ document.getElementById('desc-tag-close-btn').addEventListener('click', () => {
 });
 
 // Older saved tag descriptions are a plain string; newer ones are an object
-// with weight/purity overrides too. This normalizes either into one shape.
+// with weight/purity/name overrides too. This normalizes either into one shape.
 function normalizeTagDesc(raw){
-  if (!raw) return { text: '', showWeight: false, purity: '' };
-  if (typeof raw === 'string') return { text: raw, showWeight: false, purity: '' };
-  return { text: raw.text || '', showWeight: !!raw.showWeight, purity: raw.purity || '' };
+  if (!raw) return { text: '', showWeight: false, purity: '', nameOverride: '' };
+  if (typeof raw === 'string') return { text: raw, showWeight: false, purity: '', nameOverride: '' };
+  return { text: raw.text || '', showWeight: !!raw.showWeight, purity: raw.purity || '', nameOverride: raw.nameOverride || '' };
 }
 
 async function loadTagDescription(){
@@ -1638,6 +1642,7 @@ async function loadTagDescription(){
     ]);
     currentDescTag = tag;
     const desc = normalizeTagDesc(descSnap.val());
+    document.getElementById('desc-tag-name').value = desc.nameOverride;
     document.getElementById('desc-tag-text').value = desc.text;
     document.getElementById('desc-tag-show-weight').checked = desc.showWeight;
     document.getElementById('desc-tag-purity').value = desc.purity;
@@ -1663,15 +1668,16 @@ async function loadTagDescription(){
 document.getElementById('desc-tag-save-btn').addEventListener('click', async () => {
   if (!currentDescTag) return;
   const statusEl = document.getElementById('desc-tag-save-status');
+  const nameOverride = document.getElementById('desc-tag-name').value.trim();
   const text = document.getElementById('desc-tag-text').value.trim();
   const showWeight = document.getElementById('desc-tag-show-weight').checked;
   const purity = document.getElementById('desc-tag-purity').value.trim();
 
   statusEl.textContent = 'Saving…';
   try {
-    const hasAnything = text || showWeight || purity;
+    const hasAnything = text || showWeight || purity || nameOverride;
     await update(ref(db, '/'), {
-      ['catalogue/tagDescriptions/' + currentDescTag]: hasAnything ? { text, showWeight, purity } : null,
+      ['catalogue/tagDescriptions/' + currentDescTag]: hasAnything ? { text, showWeight, purity, nameOverride } : null,
     });
     statusEl.textContent = 'Saved!';
     setTimeout(() => { statusEl.textContent = ''; }, 2000);
@@ -1698,8 +1704,8 @@ async function loadExistingTagDescriptions(){
 
     listEl.innerHTML = tags.sort().map(t => {
       const d = normalizeTagDesc(val[t]);
-      const bits = [d.purity, d.showWeight ? 'weight shown' : null].filter(Boolean);
-      const summary = d.text ? d.text : (bits.length ? '' : '(no note — only weight/purity set)');
+      const bits = [d.nameOverride ? `name: "${d.nameOverride}"` : null, d.purity, d.showWeight ? 'weight shown' : null].filter(Boolean);
+      const summary = d.text ? d.text : (bits.length ? '' : '(no note — only overrides set)');
       return `
         <div class="home-banner-row existing-row-clickable" data-tag="${t}">
           <span class="cat" style="flex:1;">${t}${bits.length ? ` <span style="color:var(--ink-soft); font-weight:400;">— ${bits.join(' · ')}</span>` : ''}</span>
