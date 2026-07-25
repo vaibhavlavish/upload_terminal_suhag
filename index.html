@@ -527,6 +527,13 @@
 
     <!-- MANAGE TAB (delete existing catalogue photos) -->
     <div class="tab-pane" id="tab-manage">
+      <div class="home-add-card">
+        <p style="margin:0 0 8px; font-weight:700; font-size:13.5px;">Speed Up Existing Photos</p>
+        <p class="note" style="margin-top:0;">New uploads already load faster on repeat views. This is a one-time fix to apply the same speed-up to every photo already uploaded before today — safe to run anytime, and safe to run more than once.</p>
+        <button class="btn" id="speedup-existing-btn">⚡ Speed Up All Existing Photos</button>
+        <p class="link-status" id="speedup-status"></p>
+      </div>
+
       <div class="manage-search">
         <input type="text" id="manage-barcode-input" autocomplete="off" placeholder="Enter barcode to view its photos">
         <button class="btn" id="manage-load-btn">Load</button>
@@ -545,7 +552,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/fireba
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { getDatabase, ref, update, get } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
-import { getStorage, ref as storageRef, uploadBytes, getDownloadURL, deleteObject }
+import { getStorage, ref as storageRef, uploadBytes, getDownloadURL, deleteObject, updateMetadata }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
 const firebaseConfig = {
@@ -739,7 +746,12 @@ async function uploadForBarcode(barcode, blob){
   const imageId = Date.now() + '_' + Math.random().toString(36).slice(2, 8);
   const storagePath = 'catalogueImages/' + barcode + '/' + imageId + '.jpg';
   const sRef = storageRef(storage, storagePath);
-  await uploadBytes(sRef, blob, { contentType: 'image/jpeg' });
+  // Long cache lifetime is safe here: each upload gets its own unique
+  // filename (never overwritten), so there's no risk of a customer's phone
+  // caching a now-stale image under an old URL — a "new" photo always means
+  // a brand new URL, an edited/replaced one always means deleting the old
+  // entry first (Manage tab) rather than overwriting it in place.
+  await uploadBytes(sRef, blob, { contentType: 'image/jpeg', cacheControl: 'public, max-age=31536000, immutable' });
   const url = await getDownloadURL(sRef);
   const updates = {};
   updates['catalogue/items/' + barcode + '/images/' + imageId] = { imageUrl: url, storagePath, uploadedAt: Date.now() };
@@ -1399,7 +1411,7 @@ document.getElementById('home-add-btn').addEventListener('click', async () => {
     const bannerId = Date.now() + '_' + Math.random().toString(36).slice(2, 8);
     const storagePath = 'catalogueImages/_homeBanners/' + bannerId + '.jpg';
     const sRef = storageRef(storage, storagePath);
-    await uploadBytes(sRef, blob, { contentType: 'image/jpeg' });
+    await uploadBytes(sRef, blob, { contentType: 'image/jpeg', cacheControl: 'public, max-age=31536000, immutable' });
     const url = await getDownloadURL(sRef);
     await update(ref(db, '/'), {
       ['catalogue/homeBanners/' + bannerId]: { imageUrl: url, storagePath, categoryKey, itemBarcode, order: Date.now() }
@@ -1752,6 +1764,60 @@ async function loadExistingGroupDetails(){
 document.getElementById('manage-load-btn').addEventListener('click', loadManagePhotos);
 document.getElementById('manage-barcode-input').addEventListener('keydown', e => {
   if (e.key === 'Enter') { e.preventDefault(); loadManagePhotos(); }
+});
+
+// ---------- One-time speed-up: apply long cache lifetime to photos uploaded before this feature existed ----------
+document.getElementById('speedup-existing-btn').addEventListener('click', async () => {
+  const btn = document.getElementById('speedup-existing-btn');
+  const statusEl = document.getElementById('speedup-status');
+  btn.disabled = true;
+  statusEl.textContent = 'Finding photos…';
+
+  try {
+    const [itemsSnap, bannersSnap] = await Promise.all([
+      get(ref(db, 'catalogue/items')),
+      get(ref(db, 'catalogue/homeBanners')),
+    ]);
+    const items = itemsSnap.val() || {};
+    const banners = bannersSnap.val() || {};
+
+    const paths = [];
+    Object.values(items).forEach(node => {
+      if (node.storagePath) paths.push(node.storagePath); // legacy flat format
+      Object.values(node.images || {}).forEach(img => { if (img && img.storagePath) paths.push(img.storagePath); });
+    });
+    Object.values(banners).forEach(b => { if (b.storagePath) paths.push(b.storagePath); });
+
+    if (!paths.length) {
+      statusEl.textContent = 'No photos found.';
+      btn.disabled = false;
+      return;
+    }
+
+    let done = 0, failed = 0;
+    const CONCURRENCY = 6;
+    let cursor = 0;
+    async function worker(){
+      while (cursor < paths.length) {
+        const path = paths[cursor++];
+        try {
+          await updateMetadata(storageRef(storage, path), { cacheControl: 'public, max-age=31536000, immutable' });
+        } catch (e) {
+          failed++;
+          console.warn('[Speed up] failed for', path, e);
+        }
+        done++;
+        statusEl.textContent = `Updating… ${done} of ${paths.length}`;
+      }
+    }
+    await Promise.all(Array.from({ length: CONCURRENCY }, worker));
+
+    statusEl.textContent = `Done! Updated ${done - failed} of ${paths.length} photos` + (failed ? ` (${failed} couldn't be reached — safe to run again).` : '.');
+  } catch (e) {
+    console.error(e);
+    statusEl.textContent = 'Something went wrong — safe to try again.';
+  }
+  btn.disabled = false;
 });
 
 async function loadManagePhotos(){
