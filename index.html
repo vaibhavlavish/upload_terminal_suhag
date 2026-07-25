@@ -541,7 +541,8 @@
             <option value="">No size chart linked</option>
           </select>
         </div>
-        <button class="btn" id="desc-group-save-btn">Save Group Details</button>
+        <button class="btn" id="desc-group-save-btn">Save Group Details (This Group Only)</button>
+        <button class="btn secondary" id="desc-group-bulk-apply-btn" type="button" style="display:none; margin-top:8px;">Apply to All in Category</button>
         <p class="link-status" id="desc-group-save-status"></p>
       </div>
 
@@ -1659,7 +1660,13 @@ document.getElementById('desc-group-close-btn').addEventListener('click', () => 
   document.getElementById('desc-group-fields').style.display = 'none';
   document.getElementById('desc-group-barcode-input').value = '';
   document.getElementById('desc-group-status').textContent = '';
+  document.getElementById('desc-group-category-filter').value = '';
+  document.getElementById('desc-group-category-results').style.display = 'none';
+  document.getElementById('desc-group-category-results').innerHTML = '';
+  document.getElementById('desc-group-bulk-apply-btn').style.display = 'none';
   currentDescGroupBarcode = null;
+  currentCategoryFilterKey = '';
+  currentCategoryFilterCount = 0;
 });
 
 async function loadGroupDetails(){
@@ -1739,10 +1746,20 @@ async function loadGroupCategoryFilter(){
   }
 }
 
+let currentCategoryFilterKey = '';
+let currentCategoryFilterCount = 0;
+
 document.getElementById('desc-group-category-filter').addEventListener('change', async () => {
   const key = document.getElementById('desc-group-category-filter').value;
   const resultsEl = document.getElementById('desc-group-category-results');
-  if (!key) { resultsEl.style.display = 'none'; resultsEl.innerHTML = ''; return; }
+  const bulkBtn = document.getElementById('desc-group-bulk-apply-btn');
+  currentCategoryFilterKey = key;
+
+  if (!key) {
+    resultsEl.style.display = 'none'; resultsEl.innerHTML = '';
+    bulkBtn.style.display = 'none';
+    return;
+  }
 
   resultsEl.style.display = 'block';
   resultsEl.innerHTML = '<div class="home-banner-row"><span class="cat" style="color:var(--ink-soft); font-weight:400;">Loading…</span></div>';
@@ -1750,8 +1767,11 @@ document.getElementById('desc-group-category-filter').addEventListener('change',
     const snap = await get(ref(db, 'catalogue/items'));
     const items = snap.val() || {};
     const matches = Object.keys(items).filter(bc => items[bc] && homeCategoryKey(items[bc].displayName) === key);
+    currentCategoryFilterCount = matches.length;
+
     if (!matches.length) {
       resultsEl.innerHTML = '<div class="home-banner-row"><span class="cat" style="color:var(--ink-soft); font-weight:400;">No groups found in this category.</span></div>';
+      bulkBtn.style.display = 'none';
       return;
     }
     resultsEl.innerHTML = matches.sort().map(bc => {
@@ -1769,6 +1789,23 @@ document.getElementById('desc-group-category-filter').addEventListener('change',
         loadGroupDetails();
       });
     });
+
+    // Picking a category opens the fields for bulk entry straight away —
+    // no need to load one specific group first just to set something that's
+    // meant to apply to all of them anyway. Fields start blank; loading a
+    // specific barcode afterward (click above, or type one directly) still
+    // works and switches to editing just that one group.
+    currentDescGroupBarcode = null;
+    document.getElementById('desc-group-name-override').value = '';
+    document.getElementById('desc-group-name-override').placeholder = 'Leave blank to keep each item\'s own auto name';
+    document.getElementById('desc-show-weight').checked = false;
+    document.getElementById('desc-purity').value = '';
+    document.getElementById('desc-group-remarks').value = '';
+    await populateSizeChartDropdown('');
+    document.getElementById('desc-group-status').textContent = '';
+    document.getElementById('desc-group-fields').style.display = 'block';
+    bulkBtn.style.display = 'block';
+    bulkBtn.textContent = `Apply to All ${matches.length} in "${homeCategoryLabel(key)}"`;
   } catch (e) {
     console.error(e);
     resultsEl.innerHTML = '';
@@ -1799,6 +1836,49 @@ document.getElementById('desc-group-save-btn').addEventListener('click', async (
   } catch (e) {
     console.error(e);
     statusEl.textContent = 'Could not save — try again.';
+  }
+});
+
+// Applies the same Purity / Show Weight / Remarks / Size Chart / Display
+// Name to every group in the currently-selected category at once — this
+// unconditionally OVERWRITES whatever each group already had set for these
+// fields (confirmed as the wanted behavior). Tag-specific overrides (set
+// separately, in Tag-Specific Description) still take priority over these
+// on the catalogue regardless — bulk-applying here never touches those.
+document.getElementById('desc-group-bulk-apply-btn').addEventListener('click', async () => {
+  if (!currentCategoryFilterKey) return;
+  const statusEl = document.getElementById('desc-group-save-status');
+  const nameOverride = document.getElementById('desc-group-name-override').value.trim();
+  const showWeight = document.getElementById('desc-show-weight').checked;
+  const purity = document.getElementById('desc-purity').value.trim();
+  const groupRemarks = document.getElementById('desc-group-remarks').value.trim();
+  const sizeChartId = document.getElementById('desc-sizechart-select').value;
+  const label = homeCategoryLabel(currentCategoryFilterKey);
+
+  if (!confirm(`This will overwrite Purity, Show Weight, Remarks, Size Chart, and Display Name for ALL ${currentCategoryFilterCount} group(s) currently in "${label}" — including any that already have their own values set. This cannot be undone. Proceed?`)) return;
+
+  statusEl.textContent = 'Applying to category…';
+  try {
+    const snap = await get(ref(db, 'catalogue/items'));
+    const items = snap.val() || {};
+    const matches = Object.keys(items).filter(bc => items[bc] && homeCategoryKey(items[bc].displayName) === currentCategoryFilterKey);
+
+    const updates = {};
+    matches.forEach(bc => {
+      updates['catalogue/items/' + bc + '/nameOverride'] = nameOverride || null;
+      updates['catalogue/items/' + bc + '/showWeight'] = showWeight;
+      updates['catalogue/items/' + bc + '/purity'] = purity || null;
+      updates['catalogue/items/' + bc + '/groupRemarks'] = groupRemarks || null;
+      updates['catalogue/items/' + bc + '/sizeChartId'] = sizeChartId || null;
+    });
+    await update(ref(db, '/'), updates);
+
+    statusEl.textContent = `Applied to all ${matches.length} group(s) in "${label}"!`;
+    setTimeout(() => { statusEl.textContent = ''; }, 3000);
+    loadExistingGroupDetails();
+  } catch (e) {
+    console.error(e);
+    statusEl.textContent = 'Could not apply — try again.';
   }
 });
 
