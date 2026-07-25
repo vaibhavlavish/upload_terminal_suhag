@@ -52,6 +52,11 @@
   .tag-reference-line b{ color:var(--ink); }
   .existing-row-clickable{ cursor:pointer; }
   .existing-row-clickable:active{ background:#FBF6EE; }
+  .close-section-btn{
+    background:none; border:1px solid #E6DCCB; border-radius:50%; width:28px; height:28px;
+    font-size:13px; color:var(--ink-soft); cursor:pointer; flex-shrink:0; line-height:1;
+  }
+  .close-section-btn:active{ background:#F3ECDA; }
   .btn{
     width:100%; border:none; border-radius:10px; padding:12px 0;
     background:var(--oxblood); color:var(--gold-soft); font-weight:700; font-size:14px;
@@ -357,6 +362,7 @@
         <div class="link-preview">
           <div class="thumb" id="link-thumb"></div>
           <div class="info">Linked tags for this photo — <b id="link-photo-barcode"></b><br>Whichever tag is first in stock is the one priced &amp; quoted to customers.</div>
+          <button class="close-section-btn" id="link-group-close-btn" type="button" title="Close">✕</button>
         </div>
         <div class="link-list" id="link-list"></div>
         <div class="link-add-row">
@@ -451,6 +457,9 @@
       <p class="manage-status" id="desc-tag-status"></p>
 
       <div id="desc-tag-fields" style="display:none;">
+        <div style="display:flex; justify-content:flex-end;">
+          <button class="close-section-btn" id="desc-tag-close-btn" type="button" title="Close">✕</button>
+        </div>
         <p class="tag-reference-line" id="desc-tag-reference"></p>
         <div class="field" style="display:flex; align-items:center; gap:8px;">
           <input type="checkbox" id="desc-tag-show-weight" style="width:auto;">
@@ -479,6 +488,9 @@
       <p class="manage-status" id="desc-group-status"></p>
 
       <div id="desc-group-fields" style="display:none;">
+        <div style="display:flex; justify-content:flex-end;">
+          <button class="close-section-btn" id="desc-group-close-btn" type="button" title="Close">✕</button>
+        </div>
         <div class="field" style="display:flex; align-items:center; gap:8px;">
           <input type="checkbox" id="desc-show-weight" style="width:auto;">
           <label for="desc-show-weight" style="margin:0;">Show item weight on the catalogue</label>
@@ -969,6 +981,13 @@ document.getElementById('upload-btn').addEventListener('click', async () => {
 // switches to the next one automatically once that tag sells. Items with no
 // `linkedBarcodes` field behave exactly as before (just their own barcode).
 let currentLinkBarcode = null;
+
+document.getElementById('link-group-close-btn').addEventListener('click', () => {
+  document.getElementById('link-group').classList.remove('show');
+  document.getElementById('link-barcode-input').value = '';
+  document.getElementById('link-status').textContent = '';
+  currentLinkBarcode = null;
+});
 let currentLinkedList = [];
 
 document.getElementById('link-load-btn').addEventListener('click', loadLinkGroup);
@@ -1453,6 +1472,13 @@ document.getElementById('desc-group-barcode-input').addEventListener('keydown', 
 
 let currentDescGroupBarcode = null;
 
+document.getElementById('desc-group-close-btn').addEventListener('click', () => {
+  document.getElementById('desc-group-fields').style.display = 'none';
+  document.getElementById('desc-group-barcode-input').value = '';
+  document.getElementById('desc-group-status').textContent = '';
+  currentDescGroupBarcode = null;
+});
+
 async function loadGroupDetails(){
   const input = document.getElementById('desc-group-barcode-input');
   const barcode = input.value.trim().toUpperCase();
@@ -1510,6 +1536,13 @@ document.getElementById('desc-tag-barcode-input').addEventListener('keydown', e 
 });
 
 let currentDescTag = null;
+
+document.getElementById('desc-tag-close-btn').addEventListener('click', () => {
+  document.getElementById('desc-tag-fields').style.display = 'none';
+  document.getElementById('desc-tag-barcode-input').value = '';
+  document.getElementById('desc-tag-status').textContent = '';
+  currentDescTag = null;
+});
 
 // Older saved tag descriptions are a plain string; newer ones are an object
 // with weight/purity overrides too. This normalizes either into one shape.
