@@ -73,14 +73,17 @@
   .topbar span{font-size:12.5px; color:var(--ink-soft);}
   .topbar button{background:none; border:1px solid #ddd; border-radius:8px; padding:6px 12px; font-size:12px; font-weight:600; color:var(--ink-soft); cursor:pointer;}
 
-  .tabs{display:flex; gap:8px; margin-bottom:16px;}
+  .tabs{display:grid; grid-template-columns:repeat(3, 1fr); gap:10px; margin-bottom:16px;}
   .tab-btn{
-    flex:1; padding:10px 0; text-align:center; border-radius:10px; border:1.5px solid #E6DCCB;
-    background:#fff; font-size:13px; font-weight:700; color:var(--ink-soft); cursor:pointer;
+    padding:16px 6px; text-align:center; border-radius:12px; border:1.5px solid #E6DCCB;
+    background:#fff; font-size:13.5px; font-weight:700; color:var(--ink-soft); cursor:pointer;
+    line-height:1.3;
   }
   .tab-btn.active{background:var(--oxblood); border-color:var(--oxblood); color:var(--ivory);}
   .tab-pane{display:none;}
   .tab-pane.active{display:block;}
+  .toggle-row{display:flex; gap:8px;}
+  .toggle-row .tab-btn{flex:1;}
 
   /* ---------- Scan & Shoot ---------- */
   .scan-box{
@@ -403,6 +406,17 @@
 
     <!-- HOME PAGE TAB (customer catalogue home-screen banners) -->
     <div class="tab-pane" id="tab-home">
+      <div class="home-add-card">
+        <p style="margin:0 0 12px; font-weight:700; font-size:13.5px;">Scrolling Banner Text</p>
+        <p class="note" style="margin-top:0;">Shown scrolling across the top of the catalogue, above the categories. Leave blank to hide it entirely. Use this for holiday closures, delivery notices, anything time-sensitive — it updates on the catalogue immediately.</p>
+        <div class="field">
+          <input type="text" id="marquee-text-input" autocomplete="off" placeholder="e.g. ❌ No COD / PARTIAL COD  ✅ Only prepaid orders">
+        </div>
+        <button class="btn" id="marquee-save-btn">Save Banner Text</button>
+        <button class="btn secondary" id="marquee-reset-btn" type="button" style="margin-top:8px;">Reset to Default (No COD notice)</button>
+        <p class="link-status" id="marquee-status"></p>
+      </div>
+
       <div class="home-banner-list" id="home-banner-list"></div>
 
       <div class="home-add-card">
@@ -417,7 +431,7 @@
         </div>
         <div class="field">
           <label>Opens when tapped</label>
-          <div class="tabs" style="margin-bottom:10px;">
+          <div class="toggle-row" style="margin-bottom:10px;">
             <div class="tab-btn active" id="home-link-type-category" style="font-size:12.5px; padding:8px 0;">A Category</div>
             <div class="tab-btn" id="home-link-type-item" style="font-size:12.5px; padding:8px 0;">A Specific Item</div>
           </div>
@@ -606,7 +620,7 @@ function switchTab(name){
   document.getElementById('tab-reviews').classList.toggle('active', name==='reviews');
   document.getElementById('tab-desc').classList.toggle('active', name==='desc');
   document.getElementById('tab-manage').classList.toggle('active', name==='manage');
-  if (name === 'home') { loadHomeCategories(); loadHomeBanners(); }
+  if (name === 'home') { loadHomeCategories(); loadHomeBanners(); loadMarqueeText(); }
   if (name === 'reviews') loadGoogleReviewsForManagement();
   if (name === 'desc') { loadExistingTagDescriptions(); loadExistingGroupDetails(); }
   if (name === 'link') loadExistingLinkedGroups();
@@ -1183,6 +1197,49 @@ function homeCategoryLabel(key){
   if (!key || key === 'all') return 'Shop All';
   return key.replace(/\s+/g, ' ').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 }
+
+async function loadMarqueeText(){
+  const input = document.getElementById('marquee-text-input');
+  const statusEl = document.getElementById('marquee-status');
+  try {
+    const snap = await get(ref(db, 'catalogue/marqueeText'));
+    const val = snap.val();
+    input.value = (val === null || val === undefined) ? '' : val;
+    statusEl.textContent = (val === null || val === undefined)
+      ? 'Currently showing the default No-COD notice.'
+      : (val === '' ? 'Currently hidden.' : '');
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+document.getElementById('marquee-save-btn').addEventListener('click', async () => {
+  const statusEl = document.getElementById('marquee-status');
+  const text = document.getElementById('marquee-text-input').value.trim();
+  statusEl.textContent = 'Saving…';
+  try {
+    await update(ref(db, '/'), { ['catalogue/marqueeText']: text });
+    statusEl.textContent = text ? 'Saved! Live on the catalogue now.' : 'Saved — banner is now hidden.';
+    setTimeout(() => { statusEl.textContent = ''; }, 2500);
+  } catch (e) {
+    console.error(e);
+    statusEl.textContent = 'Could not save — try again.';
+  }
+});
+
+document.getElementById('marquee-reset-btn').addEventListener('click', async () => {
+  const statusEl = document.getElementById('marquee-status');
+  statusEl.textContent = 'Resetting…';
+  try {
+    await update(ref(db, '/'), { ['catalogue/marqueeText']: null });
+    document.getElementById('marquee-text-input').value = '';
+    statusEl.textContent = 'Reset — showing the default No-COD notice again.';
+    setTimeout(() => { statusEl.textContent = ''; }, 2500);
+  } catch (e) {
+    console.error(e);
+    statusEl.textContent = 'Could not reset — try again.';
+  }
+});
 
 async function loadHomeCategories(){
   const select = document.getElementById('home-category-select');
