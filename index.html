@@ -943,7 +943,16 @@ document.getElementById('pick-folder-btn').addEventListener('click', () => docum
 
 function handleFiles(fileList){
   const files = Array.from(fileList).filter(f => f.type.startsWith('image/'));
-  queue = files.map(file => ({ file, barcode: file.name.replace(/\.[^.]+$/, '').trim().toUpperCase(), status: 'pending' }));
+  // Handles photos named like "9BA.jpg", "9BA(1).jpg", "9BA (2).jpg" — the
+  // "(1)"/"(2)" is just how Windows (and phones) auto-rename duplicate
+  // filenames, not a different item. Stripping it means all of them group
+  // under the same barcode automatically, as extra photos of the same piece,
+  // instead of each becoming its own separate (wrong) catalogue entry.
+  queue = files.map(file => {
+    const nameNoExt = file.name.replace(/\.[^.]+$/, '');
+    const barcode = nameNoExt.replace(/\s*\(\d+\)\s*$/, '').trim().toUpperCase();
+    return { file, barcode, status: 'pending' };
+  });
   renderQueue();
 }
 document.getElementById('file-input-files').addEventListener('change', e => handleFiles(e.target.files));
