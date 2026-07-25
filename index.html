@@ -418,6 +418,16 @@
         <p class="link-status" id="marquee-status"></p>
       </div>
 
+      <div class="home-add-card">
+        <p style="margin:0 0 12px; font-weight:700; font-size:13.5px;">Currently Trending</p>
+        <p class="note" style="margin-top:0;">Shown as its own "Currently Popular" strip on the home page, right below the first banner. Enter the exact tags you want featured — add them in the order you'd like them shown. Anything that sells out or gets removed just quietly drops off this strip on its own.</p>
+        <div class="link-list" id="trending-tags-list"></div>
+        <div class="link-add-row">
+          <input type="text" id="trending-tag-input" autocomplete="off" placeholder="Enter a tag (e.g. GCH1)">
+          <button class="btn secondary" id="trending-tag-add-btn">+ Add Tag</button>
+        </div>
+      </div>
+
       <div class="home-banner-list" id="home-banner-list"></div>
 
       <div class="home-add-card">
@@ -684,7 +694,7 @@ function switchTab(name){
   document.getElementById('tab-desc').classList.toggle('active', name==='desc');
   document.getElementById('tab-sizecharts').classList.toggle('active', name==='sizecharts');
   document.getElementById('tab-manage').classList.toggle('active', name==='manage');
-  if (name === 'home') { loadHomeCategories(); loadHomeBanners(); loadMarqueeText(); }
+  if (name === 'home') { loadHomeCategories(); loadHomeBanners(); loadMarqueeText(); loadTrendingList(); }
   if (name === 'reviews') loadGoogleReviewsForManagement();
   if (name === 'desc') { loadExistingTagDescriptions(); loadExistingGroupDetails(); loadExistingCategoryDefaults(); loadGroupCategoryFilter(); }
   if (name === 'link') loadExistingLinkedGroups();
@@ -1314,6 +1324,85 @@ function moveLinkedTag(idx, delta){
   [currentLinkedList[idx], currentLinkedList[target]] = [currentLinkedList[target], currentLinkedList[idx]];
   renderLinkList();
   saveLinkedList();
+}
+
+// ---------- Currently Trending: a hand-picked strip shown on the catalogue home page ----------
+let currentTrendingList = [];
+
+function renderTrendingList(){
+  const list = document.getElementById('trending-tags-list');
+  if (!currentTrendingList.length) {
+    list.innerHTML = '<div class="home-banner-row"><span class="cat" style="color:var(--ink-soft); font-weight:400;">Nothing added yet — add a tag below.</span></div>';
+    return;
+  }
+  list.innerHTML = currentTrendingList.map((tag, i) => `
+    <div class="link-row" data-idx="${i}">
+      <span class="link-seq">${i + 1}</span>
+      <span class="barcode">${tag}</span>
+      <span class="link-row-actions">
+        <button class="link-move-btn" data-dir="up" ${i === 0 ? 'disabled' : ''} title="Move up">↑</button>
+        <button class="link-move-btn" data-dir="down" ${i === currentTrendingList.length - 1 ? 'disabled' : ''} title="Move down">↓</button>
+        <button class="link-remove-btn" title="Remove from Currently Trending">✕</button>
+      </span>
+    </div>
+  `).join('');
+
+  list.querySelectorAll('.link-row').forEach(row => {
+    const idx = Number(row.dataset.idx);
+    const moveBtns = row.querySelectorAll('.link-move-btn');
+    moveBtns[0].addEventListener('click', () => moveTrendingTag(idx, -1));
+    moveBtns[1].addEventListener('click', () => moveTrendingTag(idx, 1));
+    row.querySelector('.link-remove-btn').addEventListener('click', () => removeTrendingTag(idx));
+  });
+}
+
+async function loadTrendingList(){
+  try {
+    const snap = await get(ref(db, 'catalogue/trendingTags'));
+    currentTrendingList = snap.val() || [];
+    renderTrendingList();
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+async function saveTrendingList(){
+  try {
+    await update(ref(db, '/'), { ['catalogue/trendingTags']: currentTrendingList });
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+document.getElementById('trending-tag-add-btn').addEventListener('click', () => {
+  const input = document.getElementById('trending-tag-input');
+  const tag = input.value.trim().toUpperCase();
+  if (!tag) return;
+  if (currentTrendingList.includes(tag)) {
+    input.value = '';
+    return;
+  }
+  currentTrendingList.push(tag);
+  input.value = '';
+  renderTrendingList();
+  saveTrendingList();
+});
+document.getElementById('trending-tag-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); document.getElementById('trending-tag-add-btn').click(); }
+});
+
+function removeTrendingTag(idx){
+  currentTrendingList.splice(idx, 1);
+  renderTrendingList();
+  saveTrendingList();
+}
+
+function moveTrendingTag(idx, delta){
+  const target = idx + delta;
+  if (target < 0 || target >= currentTrendingList.length) return;
+  [currentTrendingList[idx], currentTrendingList[target]] = [currentTrendingList[target], currentTrendingList[idx]];
+  renderTrendingList();
+  saveTrendingList();
 }
 
 // ---------- Home Page: banner management ----------
