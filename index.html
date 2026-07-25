@@ -746,21 +746,44 @@ async function runCatalogueCleanupSweep(){
 // ---------- Shared: compress + upload one photo for a barcode ----------
 // Each capture gets its own image entry — re-uploading the same barcode adds
 // another photo rather than replacing the previous one.
-async function uploadForBarcode(barcode, blob){
+//
+// Every photo now produces TWO files: the full photo (~450KB, used when a
+// customer taps into an item for detail) and a small thumbnail (~60KB, used
+// only in the browsing grid). The grid never needed full resolution — it's
+// shown at maybe 150-300px on screen — so this cuts real download traffic
+// for anyone just scrolling the catalogue, without losing any detail where
+// it actually matters (the full photo is untouched).
+async function uploadForBarcode(barcode, fullCanvas){
   const imageId = Date.now() + '_' + Math.random().toString(36).slice(2, 8);
   const storagePath = 'catalogueImages/' + barcode + '/' + imageId + '.jpg';
+  const thumbStoragePath = 'catalogueImages/' + barcode + '/' + imageId + '_thumb.jpg';
+
+  const fullBlob = await compressCanvasToTarget(fullCanvas, TARGET_MAX_BYTES);
+  const thumbCanvas = resizedCanvasFromCanvas(fullCanvas, THUMB_MAX_WIDTH);
+  const thumbBlob = await compressCanvasToTarget(thumbCanvas, THUMB_TARGET_BYTES);
+
   const sRef = storageRef(storage, storagePath);
+  const thumbRef = storageRef(storage, thumbStoragePath);
   // Long cache lifetime is safe here: each upload gets its own unique
   // filename (never overwritten), so there's no risk of a customer's phone
   // caching a now-stale image under an old URL — a "new" photo always means
   // a brand new URL, an edited/replaced one always means deleting the old
   // entry first (Manage tab) rather than overwriting it in place.
-  await uploadBytes(sRef, blob, { contentType: 'image/jpeg', cacheControl: 'public, max-age=31536000, immutable' });
-  const url = await getDownloadURL(sRef);
+  const cacheOpts = { contentType: 'image/jpeg', cacheControl: 'public, max-age=31536000, immutable' };
+  await Promise.all([
+    uploadBytes(sRef, fullBlob, cacheOpts),
+    uploadBytes(thumbRef, thumbBlob, cacheOpts),
+  ]);
+  const [url, thumbUrl] = await Promise.all([getDownloadURL(sRef), getDownloadURL(thumbRef)]);
+
   const updates = {};
-  updates['catalogue/items/' + barcode + '/images/' + imageId] = { imageUrl: url, storagePath, uploadedAt: Date.now() };
+  updates['catalogue/items/' + barcode + '/images/' + imageId] = {
+    imageUrl: url, storagePath,
+    thumbUrl, thumbStoragePath,
+    uploadedAt: Date.now(),
+  };
   await update(ref(db, '/'), updates);
-  return { imageId, storagePath };
+  return { imageId, storagePath, thumbStoragePath };
 }
 
 // Compresses to a target file-size ceiling rather than a fixed quality
@@ -770,8 +793,12 @@ async function uploadForBarcode(barcode, blob){
 // catalogue and Manage-tab thumbnails); home page banners aim lower, ~400KB,
 // since those load on the very first screen a customer sees and there can
 // be several of them on one page, so faster load matters more there.
+// Grid thumbnails aim much lower still, ~60KB — they're only ever shown
+// small, so there's no reason to ship full-resolution detail for them.
 const TARGET_MAX_BYTES = 450 * 1024;        // ~450KB ceiling for product/tag photos
 const BANNER_TARGET_MAX_BYTES = 400 * 1024; // ~400KB ceiling for home page banners
+const THUMB_TARGET_BYTES = 60 * 1024;       // ~60KB ceiling for grid thumbnails
+const THUMB_MAX_WIDTH = 320;                // plenty crisp for a small grid card, even on retina screens
 
 function canvasToBlobAt(canvas, quality){
   return new Promise((resolve, reject) => {
@@ -792,6 +819,15 @@ async function compressCanvasToTarget(canvas, targetBytes){
 
 function compressCanvasToBlob(canvas){
   return compressCanvasToTarget(canvas);
+}
+
+function resizedCanvasFromCanvas(sourceCanvas, maxW){
+  const scale = Math.min(1, maxW / sourceCanvas.width);
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(sourceCanvas.width * scale);
+  canvas.height = Math.round(sourceCanvas.height * scale);
+  canvas.getContext('2d').drawImage(sourceCanvas, 0, 0, canvas.width, canvas.height);
+  return canvas;
 }
 
 function resizedCanvasFromVideo(video, maxW){
@@ -925,8 +961,7 @@ async function captureAndUpload(){
   try{
     const video = document.getElementById('scan-video');
     const canvas = resizedCanvasFromVideo(video, 1600);
-    const blob = await compressCanvasToBlob(canvas);
-    const imageRef = await uploadForBarcode(barcode, blob);
+    const imageRef = await uploadForBarcode(barcode, canvas);
     addRecentRow(barcode, true, imageRef);
   }catch(err){
     console.error(err);
@@ -988,6 +1023,22 @@ function compressImageFile(file, targetBytes){
     img.src = url;
   });
 }
+// Like compressImageFile, but stops after resizing — returns the canvas
+// uncompressed, so uploadForBarcode can generate both the full photo and
+// the thumbnail from the same decoded image instead of decoding it twice.
+function loadFileAsCanvas(file, maxW){
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const canvas = resizedCanvasFromImg(img, maxW);
+      URL.revokeObjectURL(url);
+      resolve(canvas);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Could not read image')); };
+    img.src = url;
+  });
+}
 function resizedCanvasFromImg(img, maxW){
   const scale = Math.min(1, maxW / img.width);
   const canvas = document.createElement('canvas');
@@ -1004,8 +1055,8 @@ document.getElementById('upload-btn').addEventListener('click', async () => {
     if (item.status === 'done') continue;
     item.status = 'uploading'; renderQueue();
     try{
-      const blob = await compressImageFile(item.file);
-      await uploadForBarcode(item.barcode, blob);
+      const canvas = await loadFileAsCanvas(item.file, 1600);
+      await uploadForBarcode(item.barcode, canvas);
       item.status = 'done';
     }catch(err){ console.error(err); item.status = 'error'; }
     renderQueue();
@@ -1859,6 +1910,7 @@ async function loadManagePhotos(){
         imgId,
         imageUrl: images[imgId].imageUrl,
         storagePath: images[imgId].storagePath || null,
+        thumbStoragePath: images[imgId].thumbStoragePath || null,
         uploadedAt: images[imgId].uploadedAt || 0,
         hiddenAt: images[imgId].hiddenAt || null,
         available: null,
@@ -1934,6 +1986,10 @@ async function deleteManagePhoto(barcode, entry, cardEl){
     if (entry.storagePath) {
       try { await deleteObject(storageRef(storage, entry.storagePath)); }
       catch (e) { console.warn('[Manage] storage object may already be gone', e); }
+    }
+    if (entry.thumbStoragePath) {
+      try { await deleteObject(storageRef(storage, entry.thumbStoragePath)); }
+      catch (e) { console.warn('[Manage] thumbnail may already be gone', e); }
     }
 
     if (entry.format === 'nested') {
