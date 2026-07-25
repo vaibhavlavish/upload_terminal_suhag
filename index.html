@@ -500,8 +500,17 @@
       <div class="home-banner-list" id="desc-tag-existing-list"></div>
 
       <p class="section-label" style="margin-top:26px;">Group Details</p>
+
+      <div class="field">
+        <label>Browse by category (optional — helps find the right group when you're not sure of the barcode)</label>
+        <select id="desc-group-category-filter">
+          <option value="">— Select a category —</option>
+        </select>
+      </div>
+      <div class="home-banner-list" id="desc-group-category-results" style="display:none;"></div>
+
       <div class="link-search">
-        <input type="text" id="desc-group-barcode-input" autocomplete="off" placeholder="Enter the barcode with photos already uploaded">
+        <input type="text" id="desc-group-barcode-input" autocomplete="off" placeholder="Or enter the barcode directly">
         <button class="btn" id="desc-group-load-btn">Load</button>
       </div>
       <p class="manage-status" id="desc-group-status"></p>
@@ -509,6 +518,10 @@
       <div id="desc-group-fields" style="display:none;">
         <div style="display:flex; justify-content:flex-end;">
           <button class="close-section-btn" id="desc-group-close-btn" type="button" title="Close">✕</button>
+        </div>
+        <div class="field">
+          <label>Display name on catalogue</label>
+          <input type="text" id="desc-group-name-override" autocomplete="off" placeholder="Currently: (loading…)">
         </div>
         <div class="field" style="display:flex; align-items:center; gap:8px;">
           <input type="checkbox" id="desc-show-weight" style="width:auto;">
@@ -669,7 +682,7 @@ function switchTab(name){
   document.getElementById('tab-manage').classList.toggle('active', name==='manage');
   if (name === 'home') { loadHomeCategories(); loadHomeBanners(); loadMarqueeText(); }
   if (name === 'reviews') loadGoogleReviewsForManagement();
-  if (name === 'desc') { loadExistingTagDescriptions(); loadExistingGroupDetails(); }
+  if (name === 'desc') { loadExistingTagDescriptions(); loadExistingGroupDetails(); loadGroupCategoryFilter(); }
   if (name === 'link') loadExistingLinkedGroups();
   if (name === 'sizecharts') loadSizeCharts();
   if (name !== 'scan') resetCapture();
@@ -1666,6 +1679,13 @@ async function loadGroupDetails(){
       return;
     }
     currentDescGroupBarcode = barcode;
+    // Left blank unless an override already exists — the placeholder shows
+    // what's currently auto-computed from stock, so leaving it blank keeps
+    // following that automatically (e.g. if you correct a typo in the POS
+    // item name later, this stays in sync). Only typing something here
+    // freezes it as a deliberate override.
+    document.getElementById('desc-group-name-override').value = node.nameOverride || '';
+    document.getElementById('desc-group-name-override').placeholder = 'Currently: ' + (node.displayName || 'no name set yet');
     document.getElementById('desc-show-weight').checked = !!node.showWeight;
     document.getElementById('desc-purity').value = node.purity || '';
     document.getElementById('desc-group-remarks').value = node.groupRemarks || '';
@@ -1695,9 +1715,70 @@ async function populateSizeChartDropdown(selectedId){
   }
 }
 
+// ---------- Category-assisted picker for Group Details ----------
+// One stock name doesn't always mean one photo group — different barcodes
+// under the same name can have separate, never-linked photos. So this
+// filters to a shortlist of ACTUAL catalogue groups matching the category,
+// rather than assuming the category itself is the group.
+async function loadGroupCategoryFilter(){
+  const select = document.getElementById('desc-group-category-filter');
+  const previousValue = select.value;
+  try {
+    const snap = await get(ref(db, 'catalogue/items'));
+    const items = snap.val() || {};
+    const keys = new Set();
+    Object.values(items).forEach(node => {
+      if (node && node.available && node.displayName) keys.add(homeCategoryKey(node.displayName));
+    });
+    const sortedKeys = Array.from(keys).sort((a, b) => homeCategoryLabel(a).localeCompare(homeCategoryLabel(b)));
+    select.innerHTML = '<option value="">— Select a category —</option>' +
+      sortedKeys.map(k => `<option value="${k.replace(/"/g,'&quot;')}">${homeCategoryLabel(k)}</option>`).join('');
+    if (sortedKeys.includes(previousValue)) select.value = previousValue;
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+document.getElementById('desc-group-category-filter').addEventListener('change', async () => {
+  const key = document.getElementById('desc-group-category-filter').value;
+  const resultsEl = document.getElementById('desc-group-category-results');
+  if (!key) { resultsEl.style.display = 'none'; resultsEl.innerHTML = ''; return; }
+
+  resultsEl.style.display = 'block';
+  resultsEl.innerHTML = '<div class="home-banner-row"><span class="cat" style="color:var(--ink-soft); font-weight:400;">Loading…</span></div>';
+  try {
+    const snap = await get(ref(db, 'catalogue/items'));
+    const items = snap.val() || {};
+    const matches = Object.keys(items).filter(bc => items[bc] && homeCategoryKey(items[bc].displayName) === key);
+    if (!matches.length) {
+      resultsEl.innerHTML = '<div class="home-banner-row"><span class="cat" style="color:var(--ink-soft); font-weight:400;">No groups found in this category.</span></div>';
+      return;
+    }
+    resultsEl.innerHTML = matches.sort().map(bc => {
+      const node = items[bc];
+      const thumb = node.imageUrl || Object.values(node.images || {})[0]?.imageUrl || '';
+      return `
+        <div class="home-banner-row existing-row-clickable" data-bc="${bc}">
+          <div class="thumb">${thumb ? `<img src="${thumb}" alt="">` : ''}</div>
+          <span class="cat" style="flex:1;">${bc}${node.nameOverride ? ` <span style="color:var(--ink-soft); font-weight:400;">— "${node.nameOverride}"</span>` : ''}</span>
+        </div>`;
+    }).join('');
+    resultsEl.querySelectorAll('.existing-row-clickable').forEach(row => {
+      row.addEventListener('click', () => {
+        document.getElementById('desc-group-barcode-input').value = row.dataset.bc;
+        loadGroupDetails();
+      });
+    });
+  } catch (e) {
+    console.error(e);
+    resultsEl.innerHTML = '';
+  }
+});
+
 document.getElementById('desc-group-save-btn').addEventListener('click', async () => {
   if (!currentDescGroupBarcode) return;
   const statusEl = document.getElementById('desc-group-save-status');
+  const nameOverride = document.getElementById('desc-group-name-override').value.trim();
   const showWeight = document.getElementById('desc-show-weight').checked;
   const purity = document.getElementById('desc-purity').value.trim();
   const groupRemarks = document.getElementById('desc-group-remarks').value.trim();
@@ -1706,6 +1787,7 @@ document.getElementById('desc-group-save-btn').addEventListener('click', async (
   statusEl.textContent = 'Saving…';
   try {
     await update(ref(db, '/'), {
+      ['catalogue/items/' + currentDescGroupBarcode + '/nameOverride']: nameOverride || null,
       ['catalogue/items/' + currentDescGroupBarcode + '/showWeight']: showWeight,
       ['catalogue/items/' + currentDescGroupBarcode + '/purity']: purity || null,
       ['catalogue/items/' + currentDescGroupBarcode + '/groupRemarks']: groupRemarks || null,
