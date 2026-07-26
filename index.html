@@ -2953,6 +2953,27 @@ async function loadAllItemsOverview(){
   }
 }
 
+// No thumbnails in this list at all — every row shown here would otherwise
+// re-download a photo just to browse structure, and at real catalogue
+// volume that adds up in Storage bandwidth for something purely informational.
+function renderItemSubRow(bc, node, tags){
+  const availTag = node.available ? '' : ' <span style="color:#B5442E;">(sold out)</span>';
+  const tagsText = tags.length > 1 ? tags.join(', ') : tags[0] + ' (unlinked)';
+  return `
+    <div class="home-banner-row existing-row-clickable" data-bc="${bc}">
+      <span class="cat" style="flex:1; padding-left:16px;">${bc}${availTag} <span style="color:var(--ink-soft); font-weight:400;">${tagsText}</span></span>
+    </div>`;
+}
+
+function wireItemSubRowClicks(listEl){
+  listEl.querySelectorAll('[data-bc]').forEach(row => {
+    row.addEventListener('click', e => {
+      e.stopPropagation();
+      jumpToManage(row.dataset.bc);
+    });
+  });
+}
+
 function renderAllItemsList(){
   const listEl = document.getElementById('allitems-list');
   const categoryKey = document.getElementById('allitems-category-filter').value;
@@ -2966,33 +2987,67 @@ function renderAllItemsList(){
       const tags = (Array.isArray(node.linkedBarcodes) && node.linkedBarcodes.length) ? node.linkedBarcodes : [bc];
       return { bc, node, tags };
     })
-    .filter(({ node, bc, tags }) => {
-      if (categoryKey && homeCategoryKey(node.displayName) !== categoryKey) return false;
-      if (!search) return true;
-      const haystack = [bc, node.displayName || '', ...tags].join(' ').toUpperCase();
-      return haystack.includes(search);
-    })
-    .sort((a, b) => (a.node.displayName || a.bc).localeCompare(b.node.displayName || b.bc));
+    .filter(({ node }) => !categoryKey || homeCategoryKey(node.displayName) === categoryKey);
 
-  if (!rows.length) {
+  if (search) {
+    // While actively searching for something specific, show a flat, already-
+    // matched list — nesting a search result inside a group you'd still have
+    // to tap open would work against the point of searching.
+    const matched = rows
+      .filter(({ node, bc, tags }) => {
+        const haystack = [bc, node.displayName || '', ...tags].join(' ').toUpperCase();
+        return haystack.includes(search);
+      })
+      .sort((a, b) => (a.node.displayName || a.bc).localeCompare(b.node.displayName || b.bc));
+
+    if (!matched.length) {
+      listEl.innerHTML = '<div class="home-banner-row"><span class="cat" style="color:var(--ink-soft); font-weight:400;">No matching items.</span></div>';
+      return;
+    }
+    listEl.innerHTML = matched.map(({ bc, node, tags }) => renderItemSubRow(bc, node, tags)).join('');
+    wireItemSubRowClicks(listEl);
+    return;
+  }
+
+  // Plain browsing (no search) — grouped by item name, collapsed by default.
+  // A name like "Silver Bracelet" that covers several unlinked groups shows
+  // once, with a count; tapping it reveals the individual barcodes underneath.
+  const groups = {};
+  rows.forEach(row => {
+    const name = row.node.displayName || row.bc;
+    (groups[name] = groups[name] || []).push(row);
+  });
+  const groupNames = Object.keys(groups).sort((a, b) => a.localeCompare(b));
+
+  if (!groupNames.length) {
     listEl.innerHTML = '<div class="home-banner-row"><span class="cat" style="color:var(--ink-soft); font-weight:400;">No matching items.</span></div>';
     return;
   }
 
-  listEl.innerHTML = rows.map(({ bc, node, tags }) => {
-    const thumb = node.imageUrl || Object.values(node.images || {})[0]?.imageUrl || '';
-    const availTag = node.available ? '' : ' <span style="color:#B5442E;">(sold out)</span>';
-    const tagsText = tags.length > 1 ? tags.join(', ') : tags[0] + ' (unlinked)';
+  listEl.innerHTML = groupNames.map(name => {
+    const groupRows = groups[name];
     return `
-      <div class="home-banner-row existing-row-clickable" data-bc="${bc}">
-        <div class="thumb">${thumb ? `<img src="${thumb}" alt="">` : ''}</div>
-        <span class="cat" style="flex:1;">${node.displayName || bc}${availTag}<br><span style="color:var(--ink-soft); font-weight:400; font-size:11.5px;">${tagsText}</span></span>
+      <div class="allitems-group">
+        <div class="home-banner-row allitems-group-header" data-name="${name.replace(/"/g,'&quot;')}" style="cursor:pointer;">
+          <span class="cat" style="flex:1;">${name} <span style="color:var(--ink-soft); font-weight:400;">— ${groupRows.length} item${groupRows.length === 1 ? '' : 's'}</span></span>
+          <span class="allitems-chevron">▸</span>
+        </div>
+        <div class="allitems-group-body" style="display:none;">
+          ${groupRows.map(({ bc, node, tags }) => renderItemSubRow(bc, node, tags)).join('')}
+        </div>
       </div>`;
   }).join('');
 
-  listEl.querySelectorAll('.existing-row-clickable').forEach(row => {
-    row.addEventListener('click', () => jumpToManage(row.dataset.bc));
+  listEl.querySelectorAll('.allitems-group-header').forEach(header => {
+    header.addEventListener('click', () => {
+      const body = header.nextElementSibling;
+      const chevron = header.querySelector('.allitems-chevron');
+      const isOpen = body.style.display !== 'none';
+      body.style.display = isOpen ? 'none' : 'block';
+      chevron.textContent = isOpen ? '▸' : '▾';
+    });
   });
+  wireItemSubRowClicks(listEl);
 }
 
 document.getElementById('allitems-category-filter').addEventListener('change', renderAllItemsList);
