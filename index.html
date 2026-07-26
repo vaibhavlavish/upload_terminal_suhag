@@ -156,6 +156,8 @@
   .manage-search button{width:auto; padding:10px 16px; white-space:nowrap;}
   .manage-status{font-size:12.5px; color:var(--ink-soft); text-align:center; margin:10px 0;}
   .manage-grid{display:grid; grid-template-columns:repeat(2, 1fr); gap:10px;}
+  .manage-photo-card{ border:1.5px solid #E6DCCB; border-radius:10px; padding:4px; background:#fff; }
+  .manage-photo-card:active{ border-color:var(--gold); }
   .manage-card{
     background:#fff; border:1px solid #EEE3CC; border-radius:12px; overflow:hidden; position:relative;
   }
@@ -281,6 +283,7 @@
       <div class="tab-btn" id="tab-reviews-btn">⭐ Reviews</div>
       <div class="tab-btn" id="tab-desc-btn">📝 Description</div>
       <div class="tab-btn" id="tab-sizecharts-btn">📏 Size Charts</div>
+      <div class="tab-btn" id="tab-aienhance-btn">✨ AI Enhance</div>
       <div class="tab-btn" id="tab-manage-btn">🗑 Manage</div>
     </div>
 
@@ -589,6 +592,55 @@
       </div>
     </div>
 
+    <!-- AI ENHANCE TAB (generate an AI-cleaned-up version of an existing photo) -->
+    <div class="tab-pane" id="tab-aienhance">
+      <p class="note" style="margin-top:0;">Pick a photo you've already uploaded, generate an AI-enhanced version, and compare it side by side before deciding whether to keep it. Nothing goes live until you tap "Use This Photo" — a discarded attempt costs nothing to your catalogue.</p>
+
+      <div class="home-add-card">
+        <p style="margin:0 0 12px; font-weight:700; font-size:13.5px;">Prompt</p>
+        <p class="note" style="margin-top:0;">This is what's sent to the AI along with the photo. The default below applies unless you change it — tweak it here for just this one attempt, or save it as the new default for every future generation.</p>
+        <div class="field">
+          <textarea id="aienhance-prompt" rows="6" style="width:100%; padding:10px 12px; border:1.5px solid #E6DCCB; border-radius:9px; font-size:13.5px; font-family:'Work Sans',sans-serif;"></textarea>
+        </div>
+        <button class="btn secondary" id="aienhance-save-prompt-btn" type="button">Save as Default Prompt</button>
+        <button class="btn secondary" id="aienhance-reset-prompt-btn" type="button" style="margin-top:8px;">Reset to Built-in Default</button>
+        <p class="link-status" id="aienhance-prompt-status"></p>
+      </div>
+
+      <div class="link-search">
+        <input type="text" id="aienhance-barcode-input" autocomplete="off" placeholder="Enter the barcode with photos already uploaded">
+        <button class="btn" id="aienhance-load-btn">Load</button>
+      </div>
+      <p class="manage-status" id="aienhance-status"></p>
+
+      <div id="aienhance-photos" style="display:none;">
+        <p class="section-label">Choose a Photo to Enhance</p>
+        <div class="manage-grid" id="aienhance-photo-grid"></div>
+
+        <div id="aienhance-compare" style="display:none; margin-top:16px;">
+          <div style="display:flex; gap:10px;">
+            <div style="flex:1;">
+              <p class="section-label" style="text-align:center;">Original</p>
+              <div class="thumb" style="width:100%; aspect-ratio:1/1;"><img id="aienhance-original-img" src="" alt="" style="width:100%; height:100%; object-fit:cover; border-radius:8px;"></div>
+            </div>
+            <div style="flex:1;">
+              <p class="section-label" style="text-align:center;">AI Enhanced</p>
+              <div class="thumb" style="width:100%; aspect-ratio:1/1; display:flex; align-items:center; justify-content:center;" id="aienhance-result-wrap">
+                <span style="color:var(--ink-soft); font-size:12px;">Not generated yet</span>
+              </div>
+            </div>
+          </div>
+
+          <button class="btn" id="aienhance-generate-btn" type="button" style="margin-top:14px;">✨ Generate</button>
+          <div id="aienhance-decision-row" class="aienhance-decision-row" style="display:none; margin-top:10px; gap:8px;">
+            <button class="btn" id="aienhance-use-btn" type="button" style="flex:1;">✓ Use This Photo</button>
+            <button class="btn secondary" id="aienhance-discard-btn" type="button" style="flex:1;">✗ Discard</button>
+          </div>
+          <p class="link-status" id="aienhance-generate-status"></p>
+        </div>
+      </div>
+    </div>
+
     <!-- MANAGE TAB (delete existing catalogue photos) -->
     <div class="tab-pane" id="tab-manage">
       <div class="home-add-card">
@@ -618,6 +670,7 @@ import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut }
 import { getDatabase, ref, update, get } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL, deleteObject, updateMetadata }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
+import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDaRjbdCnfx5-C4OXQaByZMxK2r0Cu19bI",
@@ -633,6 +686,8 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getDatabase(app);
 const storage = getStorage(app);
+const functionsInstance = getFunctions(app); // default region (us-central1) — matches where enhanceProductPhoto was deployed
+const enhanceProductPhotoCallable = httpsCallable(functionsInstance, "enhanceProductPhoto");
 
 // Base URL of the public customer catalogue — used to build shareable
 // deep links (?item=... / ?category=...) for Instagram, WhatsApp, etc.
@@ -676,6 +731,7 @@ document.getElementById('tab-home-btn').addEventListener('click', () => switchTa
 document.getElementById('tab-reviews-btn').addEventListener('click', () => switchTab('reviews'));
 document.getElementById('tab-desc-btn').addEventListener('click', () => switchTab('desc'));
 document.getElementById('tab-sizecharts-btn').addEventListener('click', () => switchTab('sizecharts'));
+document.getElementById('tab-aienhance-btn').addEventListener('click', () => switchTab('aienhance'));
 document.getElementById('tab-manage-btn').addEventListener('click', () => switchTab('manage'));
 function switchTab(name){
   document.getElementById('tab-scan-btn').classList.toggle('active', name==='scan');
@@ -685,6 +741,7 @@ function switchTab(name){
   document.getElementById('tab-reviews-btn').classList.toggle('active', name==='reviews');
   document.getElementById('tab-desc-btn').classList.toggle('active', name==='desc');
   document.getElementById('tab-sizecharts-btn').classList.toggle('active', name==='sizecharts');
+  document.getElementById('tab-aienhance-btn').classList.toggle('active', name==='aienhance');
   document.getElementById('tab-manage-btn').classList.toggle('active', name==='manage');
   document.getElementById('tab-scan').classList.toggle('active', name==='scan');
   document.getElementById('tab-bulk').classList.toggle('active', name==='bulk');
@@ -693,12 +750,14 @@ function switchTab(name){
   document.getElementById('tab-reviews').classList.toggle('active', name==='reviews');
   document.getElementById('tab-desc').classList.toggle('active', name==='desc');
   document.getElementById('tab-sizecharts').classList.toggle('active', name==='sizecharts');
+  document.getElementById('tab-aienhance').classList.toggle('active', name==='aienhance');
   document.getElementById('tab-manage').classList.toggle('active', name==='manage');
   if (name === 'home') { loadHomeCategories(); loadHomeBanners(); loadMarqueeText(); loadTrendingList(); }
   if (name === 'reviews') loadGoogleReviewsForManagement();
   if (name === 'desc') { loadExistingTagDescriptions(); loadExistingGroupDetails(); loadExistingCategoryDefaults(); loadGroupCategoryFilter(); }
   if (name === 'link') loadExistingLinkedGroups();
   if (name === 'sizecharts') loadSizeCharts();
+  if (name === 'aienhance') loadAiEnhancePrompt();
   if (name !== 'scan') resetCapture();
 }
 
@@ -2316,6 +2375,215 @@ async function deleteSizeChart(chart){
     alert('Could not delete — try again.');
   }
 }
+
+// ---------- AI Enhance: generate an AI-cleaned-up version of an existing photo ----------
+// Built-in fallback only — the real default lives in the catalogue
+// (catalogue/aiEnhancePrompt) so it can be changed here without ever
+// touching the Cloud Function's code again.
+const AI_ENHANCE_BUILTIN_PROMPT = "Professional macro commercial jewelry product photography. " +
+  "Place this exact piece of jewelry on a polished white marble surface with faint grey veins, " +
+  "softly lit from one side with warm natural light, creating gentle realistic shadows and a " +
+  "touch of natural sparkle on any stones or metal. Keep the jewelry itself completely unchanged: " +
+  "same design, same stones, same metal tone, same proportions, same fine details — only change " +
+  "the background and lighting around it. Square 1:1 aspect ratio, clean minimalist composition, " +
+  "no text, no watermark, no additional objects, no people, no hands.";
+
+async function loadAiEnhancePrompt(){
+  const textarea = document.getElementById('aienhance-prompt');
+  try {
+    const snap = await get(ref(db, 'catalogue/aiEnhancePrompt'));
+    textarea.value = snap.val() || AI_ENHANCE_BUILTIN_PROMPT;
+  } catch (e) {
+    console.error(e);
+    textarea.value = AI_ENHANCE_BUILTIN_PROMPT;
+  }
+}
+
+document.getElementById('aienhance-save-prompt-btn').addEventListener('click', async () => {
+  const statusEl = document.getElementById('aienhance-prompt-status');
+  const text = document.getElementById('aienhance-prompt').value.trim();
+  if (!text) { statusEl.textContent = 'Prompt cannot be blank.'; return; }
+  statusEl.textContent = 'Saving…';
+  try {
+    await update(ref(db, '/'), { ['catalogue/aiEnhancePrompt']: text });
+    statusEl.textContent = 'Saved as the new default for every future generation.';
+    setTimeout(() => { statusEl.textContent = ''; }, 3000);
+  } catch (e) {
+    console.error(e);
+    statusEl.textContent = 'Could not save — try again.';
+  }
+});
+
+document.getElementById('aienhance-reset-prompt-btn').addEventListener('click', () => {
+  document.getElementById('aienhance-prompt').value = AI_ENHANCE_BUILTIN_PROMPT;
+  document.getElementById('aienhance-prompt-status').textContent = 'Reset in the box below — click "Save as Default Prompt" to make this stick.';
+});
+
+let currentAiEnhanceBarcode = null;
+let currentAiEnhanceSourceUrl = null;
+let currentAiEnhanceResult = null; // { imageBase64, mimeType }
+
+document.getElementById('aienhance-load-btn').addEventListener('click', loadAiEnhancePhotos);
+document.getElementById('aienhance-barcode-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); loadAiEnhancePhotos(); }
+});
+
+async function loadAiEnhancePhotos(){
+  const input = document.getElementById('aienhance-barcode-input');
+  const barcode = input.value.trim().toUpperCase();
+  const statusEl = document.getElementById('aienhance-status');
+  const photosEl = document.getElementById('aienhance-photos');
+  const grid = document.getElementById('aienhance-photo-grid');
+  photosEl.style.display = 'none';
+  document.getElementById('aienhance-compare').style.display = 'none';
+  grid.innerHTML = '';
+  if (!barcode) { statusEl.textContent = 'Enter a barcode first.'; return; }
+
+  statusEl.textContent = 'Loading…';
+  try {
+    const snap = await get(ref(db, 'catalogue/items/' + barcode));
+    const node = snap.val();
+    if (!node) {
+      statusEl.textContent = 'No photos found for ' + barcode + ' — upload photos for it first.';
+      return;
+    }
+    currentAiEnhanceBarcode = barcode;
+
+    const urls = [];
+    if (node.imageUrl) urls.push(node.imageUrl);
+    Object.values(node.images || {}).forEach(img => { if (img && img.imageUrl) urls.push(img.imageUrl); });
+
+    if (!urls.length) {
+      statusEl.textContent = 'No photos found for ' + barcode + '.';
+      return;
+    }
+
+    grid.innerHTML = urls.map((url, i) => `
+      <div class="manage-photo-card" data-idx="${i}" style="cursor:pointer;">
+        <img src="${url}" alt="" style="width:100%; aspect-ratio:1/1; object-fit:cover; border-radius:8px; display:block;">
+      </div>
+    `).join('');
+    grid.querySelectorAll('.manage-photo-card').forEach(card => {
+      card.addEventListener('click', () => selectAiEnhanceSource(urls[Number(card.dataset.idx)]));
+    });
+
+    statusEl.textContent = '';
+    photosEl.style.display = 'block';
+  } catch (e) {
+    console.error(e);
+    statusEl.textContent = 'Could not load — try again.';
+  }
+}
+
+function selectAiEnhanceSource(url){
+  currentAiEnhanceSourceUrl = url;
+  currentAiEnhanceResult = null;
+  document.getElementById('aienhance-original-img').src = url;
+  document.getElementById('aienhance-result-wrap').innerHTML = '<span style="color:var(--ink-soft); font-size:12px;">Not generated yet</span>';
+  document.getElementById('aienhance-decision-row').style.display = 'none';
+  document.getElementById('aienhance-generate-status').textContent = '';
+  document.getElementById('aienhance-compare').style.display = 'block';
+}
+
+// Loads a (possibly cross-origin) image URL into a canvas — used both to
+// read the original photo for sending to the AI, and later to decode the
+// AI's returned image before running it through the normal upload pipeline.
+function loadUrlAsCanvas(url){
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      canvas.getContext('2d').drawImage(img, 0, 0);
+      resolve(canvas);
+    };
+    img.onerror = () => reject(new Error('Could not load image'));
+    img.src = url;
+  });
+}
+
+function base64FromCanvas(canvas, mimeType){
+  const dataUrl = canvas.toDataURL(mimeType, 0.92);
+  return dataUrl.split(',')[1];
+}
+
+document.getElementById('aienhance-generate-btn').addEventListener('click', async () => {
+  if (!currentAiEnhanceSourceUrl) return;
+  const btn = document.getElementById('aienhance-generate-btn');
+  const statusEl = document.getElementById('aienhance-generate-status');
+  const resultWrap = document.getElementById('aienhance-result-wrap');
+  const decisionRow = document.getElementById('aienhance-decision-row');
+
+  btn.disabled = true; btn.textContent = 'Generating…';
+  decisionRow.style.display = 'none';
+  statusEl.textContent = 'This can take a few seconds…';
+  resultWrap.innerHTML = '<span style="color:var(--ink-soft); font-size:12px;">Generating…</span>';
+
+  try {
+    const canvas = await loadUrlAsCanvas(currentAiEnhanceSourceUrl);
+    const imageBase64 = base64FromCanvas(canvas, 'image/jpeg');
+    const prompt = document.getElementById('aienhance-prompt').value.trim();
+
+    const response = await enhanceProductPhotoCallable({ imageBase64, mimeType: 'image/jpeg', prompt });
+    const { imageBase64: resultBase64, mimeType: resultMime } = response.data || {};
+    if (!resultBase64) throw new Error('No image came back.');
+
+    currentAiEnhanceResult = { imageBase64: resultBase64, mimeType: resultMime || 'image/png' };
+    resultWrap.innerHTML = `<img src="data:${currentAiEnhanceResult.mimeType};base64,${resultBase64}" alt="" style="width:100%; height:100%; object-fit:cover; border-radius:8px;">`;
+    decisionRow.style.display = 'flex';
+    statusEl.textContent = 'Take a look — use it, or discard and try again.';
+  } catch (e) {
+    console.error(e);
+    resultWrap.innerHTML = '<span style="color:var(--ink-soft); font-size:12px;">Generation failed</span>';
+    statusEl.textContent = 'Something went wrong — try again.';
+  }
+  btn.disabled = false; btn.textContent = '✨ Generate';
+});
+
+document.getElementById('aienhance-discard-btn').addEventListener('click', () => {
+  currentAiEnhanceResult = null;
+  document.getElementById('aienhance-result-wrap').innerHTML = '<span style="color:var(--ink-soft); font-size:12px;">Not generated yet</span>';
+  document.getElementById('aienhance-decision-row').style.display = 'none';
+  document.getElementById('aienhance-generate-status').textContent = '';
+});
+
+document.getElementById('aienhance-use-btn').addEventListener('click', async () => {
+  if (!currentAiEnhanceResult || !currentAiEnhanceBarcode) return;
+  const statusEl = document.getElementById('aienhance-generate-status');
+  const btn = document.getElementById('aienhance-use-btn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  statusEl.textContent = '';
+  try {
+    // Decode the AI's result back into a canvas, then hand it to the exact
+    // same upload pipeline every other photo goes through — same
+    // compression, same thumbnail generation, same cache headers. This adds
+    // it as a new photo for this barcode rather than replacing anything.
+    const img = new Image();
+    const genCanvas = await new Promise((resolve, reject) => {
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        canvas.getContext('2d').drawImage(img, 0, 0);
+        resolve(canvas);
+      };
+      img.onerror = () => reject(new Error('Could not decode the generated image'));
+      img.src = `data:${currentAiEnhanceResult.mimeType};base64,${currentAiEnhanceResult.imageBase64}`;
+    });
+
+    await uploadForBarcode(currentAiEnhanceBarcode, genCanvas);
+    statusEl.textContent = 'Added as a new photo for ' + currentAiEnhanceBarcode + '!';
+    currentAiEnhanceResult = null;
+    document.getElementById('aienhance-decision-row').style.display = 'none';
+    setTimeout(() => loadAiEnhancePhotos(), 1200); // refresh the picker grid to include the new photo
+  } catch (e) {
+    console.error(e);
+    statusEl.textContent = 'Could not save — try again.';
+  }
+  btn.disabled = false; btn.textContent = '✓ Use This Photo';
+});
 
 // ---------- Manage: view & delete existing catalogue photos for a barcode ----------
 // Handles two data shapes that exist in the DB:
