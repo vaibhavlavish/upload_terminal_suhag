@@ -692,13 +692,7 @@
 
     <!-- ALL ITEMS TAB (a full group-wise overview of every barcode and its linked tags) -->
     <div class="tab-pane" id="tab-allitems">
-      <p class="note" style="margin-top:0;">Every photo group currently in the catalogue, and every tag linked to it. Tap a row to jump straight to Manage for that barcode.</p>
-      <div class="field">
-        <label>Filter by category</label>
-        <select id="allitems-category-filter">
-          <option value="">All categories</option>
-        </select>
-      </div>
+      <p class="note" style="margin-top:0;">Every photo group currently in the catalogue, grouped by name and collapsed by default — tap a group to expand it, or search to jump straight to a specific barcode or tag. Tap any item row to open it in Manage.</p>
       <div class="field">
         <input type="text" id="allitems-search" autocomplete="off" placeholder="Search by barcode, tag, or item name…">
       </div>
@@ -708,13 +702,6 @@
 
     <!-- MANAGE TAB (delete existing catalogue photos) -->
     <div class="tab-pane" id="tab-manage">
-      <div class="home-add-card">
-        <p style="margin:0 0 8px; font-weight:700; font-size:13.5px;">Speed Up Existing Photos</p>
-        <p class="note" style="margin-top:0;">New uploads already load faster on repeat views. This is a one-time fix to apply the same speed-up to every photo already uploaded before today — safe to run anytime, and safe to run more than once.</p>
-        <button class="btn" id="speedup-existing-btn">⚡ Speed Up All Existing Photos</button>
-        <p class="link-status" id="speedup-status"></p>
-      </div>
-
       <div class="manage-search">
         <input type="text" id="manage-barcode-input" autocomplete="off" placeholder="Enter barcode to view its photos">
         <button class="btn" id="manage-load-btn">Load</button>
@@ -733,7 +720,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/fireba
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { getDatabase, ref, update, get, onValue } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
-import { getStorage, ref as storageRef, uploadBytes, getDownloadURL, deleteObject, updateMetadata }
+import { getStorage, ref as storageRef, uploadBytes, getDownloadURL, deleteObject }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js";
 
@@ -2929,22 +2916,10 @@ let allItemsCache = { items: {} };
 
 async function loadAllItemsOverview(){
   const statusEl = document.getElementById('allitems-status');
-  const select = document.getElementById('allitems-category-filter');
   statusEl.textContent = 'Loading…';
   try {
     const snap = await get(ref(db, 'catalogue/items'));
     allItemsCache.items = snap.val() || {};
-
-    const keys = new Set();
-    Object.values(allItemsCache.items).forEach(node => {
-      if (node && node.displayName) keys.add(homeCategoryKey(node.displayName));
-    });
-    const previousValue = select.value;
-    const sortedKeys = Array.from(keys).sort((a, b) => homeCategoryLabel(a).localeCompare(homeCategoryLabel(b)));
-    select.innerHTML = '<option value="">All categories</option>' +
-      sortedKeys.map(k => `<option value="${k.replace(/"/g,'&quot;')}">${homeCategoryLabel(k)}</option>`).join('');
-    if (sortedKeys.includes(previousValue)) select.value = previousValue;
-
     statusEl.textContent = '';
     renderAllItemsList();
   } catch (e) {
@@ -2976,7 +2951,6 @@ function wireItemSubRowClicks(listEl){
 
 function renderAllItemsList(){
   const listEl = document.getElementById('allitems-list');
-  const categoryKey = document.getElementById('allitems-category-filter').value;
   const search = document.getElementById('allitems-search').value.trim().toUpperCase();
   const items = allItemsCache.items;
 
@@ -2986,8 +2960,7 @@ function renderAllItemsList(){
       const node = items[bc];
       const tags = (Array.isArray(node.linkedBarcodes) && node.linkedBarcodes.length) ? node.linkedBarcodes : [bc];
       return { bc, node, tags };
-    })
-    .filter(({ node }) => !categoryKey || homeCategoryKey(node.displayName) === categoryKey);
+    });
 
   if (search) {
     // While actively searching for something specific, show a flat, already-
@@ -3050,7 +3023,6 @@ function renderAllItemsList(){
   wireItemSubRowClicks(listEl);
 }
 
-document.getElementById('allitems-category-filter').addEventListener('change', renderAllItemsList);
 document.getElementById('allitems-search').addEventListener('input', renderAllItemsList);
 
 // ---------- Manage: view & delete existing catalogue photos for a barcode ----------
@@ -3063,60 +3035,6 @@ document.getElementById('allitems-search').addEventListener('input', renderAllIt
 document.getElementById('manage-load-btn').addEventListener('click', loadManagePhotos);
 document.getElementById('manage-barcode-input').addEventListener('keydown', e => {
   if (e.key === 'Enter') { e.preventDefault(); loadManagePhotos(); }
-});
-
-// ---------- One-time speed-up: apply long cache lifetime to photos uploaded before this feature existed ----------
-document.getElementById('speedup-existing-btn').addEventListener('click', async () => {
-  const btn = document.getElementById('speedup-existing-btn');
-  const statusEl = document.getElementById('speedup-status');
-  btn.disabled = true;
-  statusEl.textContent = 'Finding photos…';
-
-  try {
-    const [itemsSnap, bannersSnap] = await Promise.all([
-      get(ref(db, 'catalogue/items')),
-      get(ref(db, 'catalogue/homeBanners')),
-    ]);
-    const items = itemsSnap.val() || {};
-    const banners = bannersSnap.val() || {};
-
-    const paths = [];
-    Object.values(items).forEach(node => {
-      if (node.storagePath) paths.push(node.storagePath); // legacy flat format
-      Object.values(node.images || {}).forEach(img => { if (img && img.storagePath) paths.push(img.storagePath); });
-    });
-    Object.values(banners).forEach(b => { if (b.storagePath) paths.push(b.storagePath); });
-
-    if (!paths.length) {
-      statusEl.textContent = 'No photos found.';
-      btn.disabled = false;
-      return;
-    }
-
-    let done = 0, failed = 0;
-    const CONCURRENCY = 6;
-    let cursor = 0;
-    async function worker(){
-      while (cursor < paths.length) {
-        const path = paths[cursor++];
-        try {
-          await updateMetadata(storageRef(storage, path), { cacheControl: 'public, max-age=31536000, immutable' });
-        } catch (e) {
-          failed++;
-          console.warn('[Speed up] failed for', path, e);
-        }
-        done++;
-        statusEl.textContent = `Updating… ${done} of ${paths.length}`;
-      }
-    }
-    await Promise.all(Array.from({ length: CONCURRENCY }, worker));
-
-    statusEl.textContent = `Done! Updated ${done - failed} of ${paths.length} photos` + (failed ? ` (${failed} couldn't be reached — safe to run again).` : '.');
-  } catch (e) {
-    console.error(e);
-    statusEl.textContent = 'Something went wrong — safe to try again.';
-  }
-  btn.disabled = false;
 });
 
 async function loadManagePhotos(){
