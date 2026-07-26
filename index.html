@@ -607,6 +607,44 @@
         <p class="link-status" id="aienhance-prompt-status"></p>
       </div>
 
+      <div class="home-add-card">
+        <p style="margin:0 0 12px; font-weight:700; font-size:13.5px;">Batch Generate by Category</p>
+        <p class="note" style="margin-top:0;">Generates an individual AI photo for every item in a category, each from its own real photo — not one image copied everywhere. Uses the prompt above. You still review and approve each result before anything is used.</p>
+        <div class="field">
+          <label>Category</label>
+          <select id="aienhance-batch-category">
+            <option value="">— Select a category —</option>
+          </select>
+        </div>
+        <p class="manage-status" id="aienhance-batch-count-status"></p>
+        <button class="btn" id="aienhance-batch-start-btn" type="button" disabled>Start Batch</button>
+        <div id="aienhance-batch-progress" style="display:none; margin-top:12px;">
+          <p class="manage-status" id="aienhance-batch-progress-text"></p>
+          <button class="btn secondary" id="aienhance-batch-cancel-btn" type="button">Stop After Current Item</button>
+        </div>
+      </div>
+
+      <div id="aienhance-batch-review" style="display:none;">
+        <div class="home-add-card">
+          <p style="margin:0 0 6px; font-weight:700; font-size:13.5px;" id="aienhance-batch-review-title"></p>
+          <div style="display:flex; gap:10px;">
+            <div style="flex:1;">
+              <p class="section-label" style="text-align:center;">Original</p>
+              <div class="thumb" style="width:100%; aspect-ratio:1/1;"><img id="aienhance-batch-original-img" src="" alt="" style="width:100%; height:100%; object-fit:cover; border-radius:8px;"></div>
+            </div>
+            <div style="flex:1;">
+              <p class="section-label" style="text-align:center;">AI Enhanced</p>
+              <div class="thumb" style="width:100%; aspect-ratio:1/1;"><img id="aienhance-batch-result-img" src="" alt="" style="width:100%; height:100%; object-fit:cover; border-radius:8px;"></div>
+            </div>
+          </div>
+          <div style="display:flex; gap:8px; margin-top:14px;">
+            <button class="btn" id="aienhance-batch-use-btn" type="button" style="flex:1;">✓ Use This Photo</button>
+            <button class="btn secondary" id="aienhance-batch-discard-btn" type="button" style="flex:1;">✗ Discard, Next</button>
+          </div>
+          <p class="link-status" id="aienhance-batch-review-status"></p>
+        </div>
+      </div>
+
       <div class="link-search">
         <input type="text" id="aienhance-barcode-input" autocomplete="off" placeholder="Enter the barcode with photos already uploaded">
         <button class="btn" id="aienhance-load-btn">Load</button>
@@ -757,7 +795,7 @@ function switchTab(name){
   if (name === 'desc') { loadExistingTagDescriptions(); loadExistingGroupDetails(); loadExistingCategoryDefaults(); loadGroupCategoryFilter(); }
   if (name === 'link') loadExistingLinkedGroups();
   if (name === 'sizecharts') loadSizeCharts();
-  if (name === 'aienhance') loadAiEnhancePrompt();
+  if (name === 'aienhance') { loadAiEnhancePrompt(); loadAiEnhanceBatchCategories(); }
   if (name !== 'scan') resetCapture();
 }
 
@@ -2583,6 +2621,190 @@ document.getElementById('aienhance-use-btn').addEventListener('click', async () 
     statusEl.textContent = 'Could not save — try again.';
   }
   btn.disabled = false; btn.textContent = '✓ Use This Photo';
+});
+
+// Shared helper: decode a base64 image (from either single or batch flow)
+// into a canvas, ready to hand to the normal upload pipeline.
+function base64ToCanvasEl(imageBase64, mimeType){
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      canvas.getContext('2d').drawImage(img, 0, 0);
+      resolve(canvas);
+    };
+    img.onerror = () => reject(new Error('Could not decode the generated image'));
+    img.src = `data:${mimeType};base64,${imageBase64}`;
+  });
+}
+
+function getFirstPhotoUrl(node){
+  if (node.imageUrl) return node.imageUrl; // legacy flat format
+  const images = node.images || {};
+  const entries = Object.values(images).filter(img => img && img.imageUrl && !img.hiddenAt);
+  if (!entries.length) return null;
+  entries.sort((a, b) => (a.uploadedAt || 0) - (b.uploadedAt || 0));
+  return entries[0].imageUrl;
+}
+
+// ---------- AI Enhance: batch generate, one individual result per item in a category ----------
+// Approximate — actual per-image cost varies slightly with input size, but
+// this is close enough to give an honest heads-up before spending real money
+// across a whole category at once.
+const AI_ENHANCE_APPROX_COST_PER_IMAGE_USD = 0.04;
+
+async function loadAiEnhanceBatchCategories(){
+  const select = document.getElementById('aienhance-batch-category');
+  const previousValue = select.value;
+  try {
+    const snap = await get(ref(db, 'catalogue/items'));
+    const items = snap.val() || {};
+    const keys = new Set();
+    Object.values(items).forEach(node => {
+      if (node && node.available && node.displayName) keys.add(homeCategoryKey(node.displayName));
+    });
+    const sortedKeys = Array.from(keys).sort((a, b) => homeCategoryLabel(a).localeCompare(homeCategoryLabel(b)));
+    select.innerHTML = '<option value="">— Select a category —</option>' +
+      sortedKeys.map(k => `<option value="${k.replace(/"/g,'&quot;')}">${homeCategoryLabel(k)}</option>`).join('');
+    if (sortedKeys.includes(previousValue)) select.value = previousValue;
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+let aiEnhanceBatchQueue = [];
+let aiEnhanceBatchIndex = 0;
+let aiEnhanceBatchStopRequested = false;
+let aiEnhanceBatchCurrentResult = null; // { barcode, imageBase64, mimeType }
+
+document.getElementById('aienhance-batch-category').addEventListener('change', async () => {
+  const key = document.getElementById('aienhance-batch-category').value;
+  const countStatus = document.getElementById('aienhance-batch-count-status');
+  const startBtn = document.getElementById('aienhance-batch-start-btn');
+  startBtn.disabled = true;
+  if (!key) { countStatus.textContent = ''; return; }
+
+  countStatus.textContent = 'Checking category size…';
+  try {
+    const snap = await get(ref(db, 'catalogue/items'));
+    const items = snap.val() || {};
+    const matches = Object.keys(items).filter(bc => {
+      const node = items[bc];
+      return node && homeCategoryKey(node.displayName) === key && getFirstPhotoUrl(node);
+    });
+    const estCost = (matches.length * AI_ENHANCE_APPROX_COST_PER_IMAGE_USD).toFixed(2);
+    countStatus.textContent = matches.length
+      ? `${matches.length} item(s) with a photo in this category — roughly $${estCost} in AI generation if you run the whole batch.`
+      : 'No items with photos found in this category.';
+    startBtn.disabled = !matches.length;
+  } catch (e) {
+    console.error(e);
+    countStatus.textContent = 'Could not check — try again.';
+  }
+});
+
+document.getElementById('aienhance-batch-start-btn').addEventListener('click', async () => {
+  const key = document.getElementById('aienhance-batch-category').value;
+  if (!key) return;
+
+  try {
+    const snap = await get(ref(db, 'catalogue/items'));
+    const items = snap.val() || {};
+    aiEnhanceBatchQueue = Object.keys(items)
+      .filter(bc => items[bc] && homeCategoryKey(items[bc].displayName) === key && getFirstPhotoUrl(items[bc]))
+      .map(bc => ({ barcode: bc, photoUrl: getFirstPhotoUrl(items[bc]) }));
+  } catch (e) {
+    console.error(e);
+    return;
+  }
+
+  if (!aiEnhanceBatchQueue.length) return;
+
+  const estCost = (aiEnhanceBatchQueue.length * AI_ENHANCE_APPROX_COST_PER_IMAGE_USD).toFixed(2);
+  if (!confirm(`Generate an individual AI photo for each of ${aiEnhanceBatchQueue.length} item(s) — roughly $${estCost} total. You'll review and approve each one as it's generated. Proceed?`)) return;
+
+  aiEnhanceBatchIndex = 0;
+  aiEnhanceBatchStopRequested = false;
+  document.getElementById('aienhance-batch-start-btn').style.display = 'none';
+  document.getElementById('aienhance-batch-progress').style.display = 'block';
+  document.getElementById('aienhance-batch-cancel-btn').disabled = false;
+  document.getElementById('aienhance-batch-cancel-btn').textContent = 'Stop After Current Item';
+  processNextBatchItem();
+});
+
+document.getElementById('aienhance-batch-cancel-btn').addEventListener('click', () => {
+  aiEnhanceBatchStopRequested = true;
+  document.getElementById('aienhance-batch-cancel-btn').disabled = true;
+  document.getElementById('aienhance-batch-cancel-btn').textContent = 'Stopping after this item…';
+});
+
+async function processNextBatchItem(){
+  const progressText = document.getElementById('aienhance-batch-progress-text');
+  const reviewEl = document.getElementById('aienhance-batch-review');
+
+  if (aiEnhanceBatchStopRequested || aiEnhanceBatchIndex >= aiEnhanceBatchQueue.length) {
+    reviewEl.style.display = 'none';
+    document.getElementById('aienhance-batch-progress').style.display = 'none';
+    document.getElementById('aienhance-batch-start-btn').style.display = 'block';
+    document.getElementById('aienhance-batch-count-status').textContent =
+      `Batch finished — processed ${aiEnhanceBatchIndex} of ${aiEnhanceBatchQueue.length} item(s).`;
+    aiEnhanceBatchQueue = [];
+    return;
+  }
+
+  const current = aiEnhanceBatchQueue[aiEnhanceBatchIndex];
+  progressText.textContent = `Generating ${aiEnhanceBatchIndex + 1} of ${aiEnhanceBatchQueue.length} — ${current.barcode}…`;
+  reviewEl.style.display = 'none';
+
+  try {
+    const canvas = await loadUrlAsCanvas(current.photoUrl);
+    const imageBase64 = base64FromCanvas(canvas, 'image/jpeg');
+    const prompt = document.getElementById('aienhance-prompt').value.trim();
+    const response = await enhanceProductPhotoCallable({ imageBase64, mimeType: 'image/jpeg', prompt });
+    const { imageBase64: resultBase64, mimeType: resultMime } = response.data || {};
+    if (!resultBase64) throw new Error('No image came back.');
+
+    aiEnhanceBatchCurrentResult = { barcode: current.barcode, imageBase64: resultBase64, mimeType: resultMime || 'image/png' };
+    document.getElementById('aienhance-batch-review-title').textContent = `${current.barcode} (${aiEnhanceBatchIndex + 1} of ${aiEnhanceBatchQueue.length})`;
+    document.getElementById('aienhance-batch-original-img').src = current.photoUrl;
+    document.getElementById('aienhance-batch-result-img').src = `data:${aiEnhanceBatchCurrentResult.mimeType};base64,${resultBase64}`;
+    document.getElementById('aienhance-batch-review-status').textContent = '';
+    reviewEl.style.display = 'block';
+    progressText.textContent = `Ready to review ${aiEnhanceBatchIndex + 1} of ${aiEnhanceBatchQueue.length} — ${current.barcode}.`;
+  } catch (e) {
+    console.error(e);
+    // Don't let one failed item stop the whole batch — log it, skip to the next.
+    progressText.textContent = `${current.barcode} failed to generate — skipping to the next item.`;
+    aiEnhanceBatchIndex++;
+    setTimeout(processNextBatchItem, 800);
+  }
+}
+
+document.getElementById('aienhance-batch-use-btn').addEventListener('click', async () => {
+  if (!aiEnhanceBatchCurrentResult) return;
+  const statusEl = document.getElementById('aienhance-batch-review-status');
+  const btn = document.getElementById('aienhance-batch-use-btn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    const canvas = await base64ToCanvasEl(aiEnhanceBatchCurrentResult.imageBase64, aiEnhanceBatchCurrentResult.mimeType);
+    await uploadForBarcode(aiEnhanceBatchCurrentResult.barcode, canvas);
+    statusEl.textContent = 'Saved!';
+  } catch (e) {
+    console.error(e);
+    statusEl.textContent = 'Could not save this one — moving on.';
+  }
+  btn.disabled = false; btn.textContent = '✓ Use This Photo';
+  aiEnhanceBatchCurrentResult = null;
+  aiEnhanceBatchIndex++;
+  processNextBatchItem();
+});
+
+document.getElementById('aienhance-batch-discard-btn').addEventListener('click', () => {
+  aiEnhanceBatchCurrentResult = null;
+  aiEnhanceBatchIndex++;
+  processNextBatchItem();
 });
 
 // ---------- Manage: view & delete existing catalogue photos for a barcode ----------
