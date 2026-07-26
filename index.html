@@ -2960,6 +2960,7 @@ function renderAllItemsList(){
   const items = allItemsCache.items;
 
   const rows = Object.keys(items)
+    .filter(bc => items[bc] && typeof items[bc] === 'object') // guards against any stray null/malformed entry crashing the whole list
     .map(bc => {
       const node = items[bc];
       const tags = (Array.isArray(node.linkedBarcodes) && node.linkedBarcodes.length) ? node.linkedBarcodes : [bc];
