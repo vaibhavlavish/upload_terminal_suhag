@@ -652,7 +652,10 @@
       <p class="manage-status" id="aienhance-status"></p>
 
       <div id="aienhance-photos" style="display:none;">
-        <p class="section-label">Choose a Photo to Enhance</p>
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <p class="section-label" style="margin:0;">Choose a Photo to Enhance</p>
+          <button class="close-section-btn" id="aienhance-close-btn" type="button" title="Close">✕</button>
+        </div>
         <div class="manage-grid" id="aienhance-photo-grid"></div>
 
         <div id="aienhance-compare" style="display:none; margin-top:16px;">
@@ -2462,6 +2465,16 @@ let currentAiEnhanceSourceUrl = null;
 let currentAiEnhanceResult = null; // { imageBase64, mimeType }
 
 document.getElementById('aienhance-load-btn').addEventListener('click', loadAiEnhancePhotos);
+document.getElementById('aienhance-close-btn').addEventListener('click', () => {
+  document.getElementById('aienhance-photos').style.display = 'none';
+  document.getElementById('aienhance-compare').style.display = 'none';
+  document.getElementById('aienhance-barcode-input').value = '';
+  document.getElementById('aienhance-status').textContent = '';
+  document.getElementById('aienhance-photo-grid').innerHTML = '';
+  currentAiEnhanceBarcode = null;
+  currentAiEnhanceSourceUrl = null;
+  currentAiEnhanceResult = null;
+});
 document.getElementById('aienhance-barcode-input').addEventListener('keydown', e => {
   if (e.key === 'Enter') { e.preventDefault(); loadAiEnhancePhotos(); }
 });
