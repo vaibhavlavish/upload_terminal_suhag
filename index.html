@@ -515,11 +515,11 @@
 
       <div class="home-add-card">
         <div class="field">
-          <label>Reel link</label>
+          <label>Reel link (optional — kept for reference, doesn't do anything automatic since Instagram doesn't expose video files from a plain link)</label>
           <input type="text" id="reel-url-input" autocomplete="off" placeholder="https://www.instagram.com/reel/…">
         </div>
         <div class="field">
-          <label>Thumbnail (a screenshot from the Reel works well)</label>
+          <label>Thumbnail (optional if you're uploading a video below)</label>
           <button class="btn secondary" id="reel-thumb-pick-btn" type="button">Choose Photo</button>
           <input type="file" id="reel-thumb-file" accept="image/*">
         </div>
@@ -2137,11 +2137,13 @@ function renderReelsList(reels){
     return;
   }
   list.innerHTML = reels.map((r, i) => {
-    const targetLabel = r.itemBarcode ? ('Item: ' + r.itemBarcode) : r.categoryKey ? homeCategoryLabel(r.categoryKey) : 'Not tagged — just opens the Reel';
+    const notTaggedLabel = r.reelUrl ? 'Not tagged — just opens the Reel' : 'Not tagged, no Reel link — tap does nothing';
+    const targetLabel = r.itemBarcode ? ('Item: ' + r.itemBarcode) : r.categoryKey ? homeCategoryLabel(r.categoryKey) : notTaggedLabel;
     const videoTag = r.videoUrl ? ' · ▶ autoplays' : '';
+    const thumb = r.thumbnailUrl ? `<img src="${r.thumbnailUrl}" alt="">` : '<span style="font-size:20px;">🎬</span>';
     return `
     <div class="home-banner-row" data-idx="${i}">
-      <div class="thumb"><img src="${r.thumbnailUrl}" alt=""></div>
+      <div class="thumb" style="display:flex; align-items:center; justify-content:center;">${thumb}</div>
       <span class="cat">${targetLabel}${videoTag}</span>
       <span class="home-banner-row-actions">
         <button class="link-move-btn" data-dir="up" ${i === 0 ? 'disabled' : ''} title="Move up">↑</button>
@@ -2199,15 +2201,15 @@ document.getElementById('reel-add-btn').addEventListener('click', async () => {
   const urlInput = document.getElementById('reel-url-input');
   const fileInput = document.getElementById('reel-thumb-file');
   const file = fileInput.files[0];
+  const videoFile = document.getElementById('reel-video-file').files[0];
   const statusEl = document.getElementById('reel-add-status');
   const reelUrl = urlInput.value.trim();
 
-  if (!reelUrl) { statusEl.textContent = 'Paste the Reel link first.'; return; }
-  if (!/^https?:\/\/(www\.)?instagram\.com\//i.test(reelUrl)) {
+  if (reelUrl && !/^https?:\/\/(www\.)?instagram\.com\//i.test(reelUrl)) {
     statusEl.textContent = 'That doesn\'t look like an Instagram link — check and try again.';
     return;
   }
-  if (!file) { statusEl.textContent = 'Choose a thumbnail image first.'; return; }
+  if (!file && !videoFile) { statusEl.textContent = 'Add a thumbnail image, a video, or both.'; return; }
 
   let categoryKey = null, itemBarcode = null;
   if (reelLinkType === 'item') {
@@ -2231,20 +2233,22 @@ document.getElementById('reel-add-btn').addEventListener('click', async () => {
   btn.disabled = true; btn.textContent = 'Uploading…';
   statusEl.textContent = '';
   try {
-    const smallCanvas = await loadFileAsCanvas(file, REEL_THUMB_MAX_WIDTH);
-    const blob = await compressCanvasToTarget(smallCanvas, REEL_THUMB_TARGET_BYTES);
     const reelId = Date.now() + '_' + Math.random().toString(36).slice(2, 8);
-    const storagePath = 'catalogueImages/_reels/' + reelId + '.jpg';
-    const sRef = storageRef(storage, storagePath);
-    await uploadBytes(sRef, blob, { contentType: 'image/jpeg', cacheControl: 'public, max-age=31536000, immutable' });
-    const thumbnailUrl = await getDownloadURL(sRef);
+    let thumbnailUrl = null, thumbnailStoragePath = null;
+    if (file) {
+      const smallCanvas = await loadFileAsCanvas(file, REEL_THUMB_MAX_WIDTH);
+      const blob = await compressCanvasToTarget(smallCanvas, REEL_THUMB_TARGET_BYTES);
+      thumbnailStoragePath = 'catalogueImages/_reels/' + reelId + '.jpg';
+      const sRef = storageRef(storage, thumbnailStoragePath);
+      await uploadBytes(sRef, blob, { contentType: 'image/jpeg', cacheControl: 'public, max-age=31536000, immutable' });
+      thumbnailUrl = await getDownloadURL(sRef);
+    }
 
     // The video is uploaded exactly as chosen — no client-side compression
     // attempt, since reliably re-encoding video in the browser isn't
     // realistic the way image compression is. The 8MB cap above is what
     // keeps this from becoming an unbounded bandwidth cost instead.
     let videoUrl = null, videoStoragePath = null;
-    const videoFile = document.getElementById('reel-video-file').files[0];
     if (videoFile) {
       videoStoragePath = 'catalogueImages/_reels/' + reelId + '_video.mp4';
       const videoRef = storageRef(storage, videoStoragePath);
@@ -2253,7 +2257,7 @@ document.getElementById('reel-add-btn').addEventListener('click', async () => {
     }
 
     await update(ref(db, '/'), {
-      ['catalogue/reels/' + reelId]: { reelUrl, thumbnailUrl, thumbnailStoragePath: storagePath, videoUrl, videoStoragePath, categoryKey, itemBarcode, order: Date.now() }
+      ['catalogue/reels/' + reelId]: { reelUrl: reelUrl || null, thumbnailUrl, thumbnailStoragePath, videoUrl, videoStoragePath, categoryKey, itemBarcode, order: Date.now() }
     });
     urlInput.value = '';
     fileInput.value = '';
