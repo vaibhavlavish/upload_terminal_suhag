@@ -580,6 +580,11 @@
           <label>Display name on catalogue</label>
           <input type="text" id="desc-group-name-override" autocomplete="off" placeholder="Currently: (loading…)">
         </div>
+        <div class="field" id="desc-category-label-field" style="display:none;">
+          <label>Category chip label on catalogue</label>
+          <input type="text" id="desc-category-label" autocomplete="off" placeholder="Leave blank to show the category name as-is">
+          <p class="note" style="margin-top:4px;">Only renames the chip text customers see — items still group under this category exactly the same either way.</p>
+        </div>
         <div class="field" style="display:flex; align-items:center; gap:8px;">
           <input type="checkbox" id="desc-show-weight" style="width:auto;">
           <label for="desc-show-weight" style="margin:0;">Show item weight on the catalogue</label>
@@ -2156,6 +2161,7 @@ async function loadGroupDetails(){
     // freezes it as a deliberate override.
     document.getElementById('desc-group-name-override').value = node.nameOverride || '';
     document.getElementById('desc-group-name-override').placeholder = 'Currently: ' + (node.displayName || 'no name set yet');
+    document.getElementById('desc-category-label-field').style.display = 'none';
     document.getElementById('desc-show-weight').checked = !!node.showWeight;
     document.getElementById('desc-purity').value = node.purity || '';
     document.getElementById('desc-group-remarks').value = node.groupRemarks || '';
@@ -2265,6 +2271,8 @@ document.getElementById('desc-group-category-filter').addEventListener('change',
     const cat = categorySnap.val() || {};
     document.getElementById('desc-group-name-override').value = cat.nameOverride || '';
     document.getElementById('desc-group-name-override').placeholder = 'Leave blank to keep each item\'s own auto name';
+    document.getElementById('desc-category-label-field').style.display = 'block';
+    document.getElementById('desc-category-label').value = cat.categoryLabel || '';
     document.getElementById('desc-show-weight').checked = !!cat.showWeight;
     document.getElementById('desc-purity').value = cat.purity || '';
     document.getElementById('desc-group-remarks').value = cat.groupRemarks || '';
@@ -2328,6 +2336,7 @@ document.getElementById('desc-group-bulk-apply-btn').addEventListener('click', a
   if (!currentCategoryFilterKey) return;
   const statusEl = document.getElementById('desc-group-save-status');
   const nameOverride = document.getElementById('desc-group-name-override').value.trim();
+  const categoryLabel = document.getElementById('desc-category-label').value.trim();
   const showWeight = document.getElementById('desc-show-weight').checked;
   const purity = document.getElementById('desc-purity').value.trim();
   const groupRemarks = document.getElementById('desc-group-remarks').value.trim();
@@ -2342,7 +2351,7 @@ document.getElementById('desc-group-bulk-apply-btn').addEventListener('click', a
   statusEl.textContent = 'Saving category default…';
   try {
     await update(ref(db, '/'), {
-      ['catalogue/categorySettings/' + currentCategoryFilterKey]: { nameOverride, showWeight, purity, groupRemarks, sizeChartId, scarcityEnabled, scarcityCount }
+      ['catalogue/categorySettings/' + currentCategoryFilterKey]: { nameOverride, categoryLabel, showWeight, purity, groupRemarks, sizeChartId, scarcityEnabled, scarcityCount }
     });
     statusEl.textContent = `Saved as the default for "${label}"!`;
     setTimeout(() => { statusEl.textContent = ''; }, 3000);
@@ -2548,17 +2557,18 @@ async function loadExistingCategoryDefaults(){
   try {
     const snap = await get(ref(db, 'catalogue/categorySettings'));
     const val = snap.val() || {};
-    const keys = Object.keys(val).filter(k => val[k] && (val[k].purity || val[k].groupRemarks || val[k].showWeight || val[k].sizeChartId || val[k].nameOverride || val[k].scarcityEnabled));
+    const keys = Object.keys(val).filter(k => val[k] && (val[k].purity || val[k].groupRemarks || val[k].showWeight || val[k].sizeChartId || val[k].nameOverride || val[k].scarcityEnabled || val[k].categoryLabel));
     if (!keys.length) {
       listEl.innerHTML = '<div class="home-banner-row"><span class="cat" style="color:var(--ink-soft); font-weight:400;">No category defaults set yet.</span></div>';
       return;
     }
     listEl.innerHTML = keys.sort().map(k => {
       const c = val[k];
+      const heading = c.categoryLabel ? `${homeCategoryLabel(k)} → shown as "${c.categoryLabel}"` : homeCategoryLabel(k);
       const bits = [c.purity, c.showWeight ? 'weight shown' : null, (c.scarcityEnabled && c.scarcityCount) ? `Only ${c.scarcityCount} Left` : null].filter(Boolean).join(' · ');
       return `
         <div class="home-banner-row existing-row-clickable" data-key="${k}">
-          <span class="cat" style="flex:1;">${homeCategoryLabel(k)}</span>
+          <span class="cat" style="flex:1;">${heading}</span>
           <p class="review-row-text" style="max-width:150px;">${bits}</p>
           <button class="manage-del-btn" data-key="${k}" title="Remove this category's default">🗑</button>
         </div>`;
