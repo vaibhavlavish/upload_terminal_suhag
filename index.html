@@ -301,6 +301,7 @@
       <div class="tab-btn" id="tab-aienhance-btn">✨ AI Enhance</div>
       <div class="tab-btn" id="tab-reverify-btn">🔍 Reverify</div>
       <div class="tab-btn" id="tab-allitems-btn">🗂 All Items</div>
+      <div class="tab-btn" id="tab-customprice-btn">🧮 Custom Price</div>
       <div class="tab-btn" id="tab-manage-btn">🗑 Manage</div>
     </div>
 
@@ -749,6 +750,47 @@
       <div class="home-banner-list" id="allitems-list"></div>
     </div>
 
+    <!-- CUSTOM PRICE TAB (catalogue-only making-charge override, per exact tag) -->
+    <div class="tab-pane" id="tab-customprice">
+      <p class="note" style="margin-top:0;">Adjust the making charge (and even the making type) used for a specific tag's price on the catalogue — this never touches that tag's real making data in the POS, and has no effect on in-store price checking. Leave it unset and the catalogue just uses whatever's actually in the POS, same as always.</p>
+
+      <div class="link-search">
+        <input type="text" id="cprice-tag-input" autocomplete="off" placeholder="Enter the exact tag/barcode">
+        <button class="btn" id="cprice-load-btn">Load</button>
+      </div>
+      <p class="manage-status" id="cprice-status"></p>
+
+      <div id="cprice-fields" style="display:none;">
+        <div class="home-add-card">
+          <p style="margin:0 0 6px; font-weight:700; font-size:13.5px;" id="cprice-current-heading"></p>
+          <p class="note" style="margin-top:0;" id="cprice-current-pos"></p>
+
+          <div class="field">
+            <label>Making type for the catalogue price</label>
+            <select id="cprice-making-type">
+              <option value="%">Percentage (%)</option>
+              <option value="wastage">Wastage (%)</option>
+              <option value="per g">Per Gram (₹/g)</option>
+              <option value="per pc">Per Piece (₹)</option>
+              <option value="MRP">MRP (flat amount)</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Making value</label>
+            <input type="number" id="cprice-making-value" min="0" step="0.01" placeholder="e.g. 31">
+          </div>
+          <p class="note" style="margin-top:0;" id="cprice-preview"></p>
+
+          <button class="btn" id="cprice-save-btn">Save Catalogue Override</button>
+          <button class="btn secondary" id="cprice-remove-btn" type="button" style="margin-top:8px;">Remove Override (Use POS Default)</button>
+          <p class="link-status" id="cprice-save-status"></p>
+        </div>
+      </div>
+
+      <p class="section-label" style="margin-top:10px;">Overrides Currently Set</p>
+      <div class="home-banner-list" id="cprice-existing-list"></div>
+    </div>
+
     <!-- MANAGE TAB (delete existing catalogue photos) -->
     <div class="tab-pane" id="tab-manage">
       <div class="manage-search">
@@ -835,6 +877,7 @@ document.getElementById('tab-sizecharts-btn').addEventListener('click', () => sw
 document.getElementById('tab-aienhance-btn').addEventListener('click', () => switchTab('aienhance'));
 document.getElementById('tab-reverify-btn').addEventListener('click', () => switchTab('reverify'));
 document.getElementById('tab-allitems-btn').addEventListener('click', () => switchTab('allitems'));
+document.getElementById('tab-customprice-btn').addEventListener('click', () => switchTab('customprice'));
 document.getElementById('tab-manage-btn').addEventListener('click', () => switchTab('manage'));
 function switchTab(name){
   document.getElementById('tab-scan-btn').classList.toggle('active', name==='scan');
@@ -847,6 +890,7 @@ function switchTab(name){
   document.getElementById('tab-aienhance-btn').classList.toggle('active', name==='aienhance');
   document.getElementById('tab-reverify-btn').classList.toggle('active', name==='reverify');
   document.getElementById('tab-allitems-btn').classList.toggle('active', name==='allitems');
+  document.getElementById('tab-customprice-btn').classList.toggle('active', name==='customprice');
   document.getElementById('tab-manage-btn').classList.toggle('active', name==='manage');
   document.getElementById('tab-scan').classList.toggle('active', name==='scan');
   document.getElementById('tab-bulk').classList.toggle('active', name==='bulk');
@@ -858,6 +902,7 @@ function switchTab(name){
   document.getElementById('tab-aienhance').classList.toggle('active', name==='aienhance');
   document.getElementById('tab-reverify').classList.toggle('active', name==='reverify');
   document.getElementById('tab-allitems').classList.toggle('active', name==='allitems');
+  document.getElementById('tab-customprice').classList.toggle('active', name==='customprice');
   document.getElementById('tab-manage').classList.toggle('active', name==='manage');
   if (name === 'home') { loadHomeCategories(); loadHomeBanners(); loadMarqueeText(); loadTrendingList(); loadCatIconCategories(); loadExistingCatIcons(); }
   if (name === 'reviews') loadGoogleReviewsForManagement();
@@ -866,6 +911,7 @@ function switchTab(name){
   if (name === 'sizecharts') loadSizeCharts();
   if (name === 'reverify') loadReverificationQueue();
   if (name === 'allitems') loadAllItemsOverview();
+  if (name === 'customprice') loadCustomPriceOverridesList();
   if (name === 'aienhance') { loadAiEnhancePrompt(); loadAiEnhanceBatchCategories(); }
   if (name !== 'scan') resetCapture();
 }
@@ -1029,8 +1075,8 @@ async function uploadForBarcode(barcode, fullCanvas){
 // small, so there's no reason to ship full-resolution detail for them.
 const TARGET_MAX_BYTES = 450 * 1024;        // ~450KB ceiling for product/tag photos
 const BANNER_TARGET_MAX_BYTES = 400 * 1024; // ~400KB ceiling for home page banners
-const THUMB_TARGET_BYTES = 60 * 1024;       // ~60KB ceiling for grid thumbnails
-const THUMB_MAX_WIDTH = 320;                // plenty crisp for a small grid card, even on retina screens
+const THUMB_TARGET_BYTES = 110 * 1024;      // raised from 60KB — detailed jewelry photos (fine engraving, sparkle) were hitting the old quality floor and coming out visibly soft
+const THUMB_MAX_WIDTH = 480;                // raised from 320 — more actual pixels to represent fine detail before any compression happens at all
 
 function canvasToBlobAt(canvas, quality){
   return new Promise((resolve, reject) => {
@@ -1042,7 +1088,7 @@ async function compressCanvasToTarget(canvas, targetBytes){
   targetBytes = targetBytes || TARGET_MAX_BYTES;
   let quality = 0.9;
   let blob = await canvasToBlobAt(canvas, quality);
-  while (blob.size > targetBytes && quality > 0.5) {
+  while (blob.size > targetBytes && quality > 0.6) {
     quality -= 0.08;
     blob = await canvasToBlobAt(canvas, quality);
   }
@@ -3118,6 +3164,165 @@ function jumpToManage(bc){
   switchTab('manage');
   document.getElementById('manage-barcode-input').value = bc;
   loadManagePhotos();
+}
+
+// ---------- Custom Price: catalogue-only making-charge override, per exact tag ----------
+// Reads the tag's actual making type/value straight from the POS's own
+// stored product data — mirrors the exact same precedence the POS itself
+// uses (per piece, then wastage, then per gram, then percent, then MRP) so
+// what's shown here as "currently in POS" always matches reality.
+function resolveRawMakingInfo(d){
+  if (!d) return null;
+  if (d.mrp && !d.metal) return { type: 'MRP', value: d.mrp, label: `MRP ₹${d.mrp}` };
+  if (d.makingPerPc > 0) return { type: 'per pc', value: d.makingPerPc, label: `Per Piece ₹${d.makingPerPc}` };
+  if (d.makingWastage > 0) return { type: 'wastage', value: d.makingWastage, label: `Wastage ${d.makingWastage}%` };
+  if (d.makingPerGram > 0) return { type: 'per g', value: d.makingPerGram, label: `Per Gram ₹${d.makingPerGram}/g` };
+  if (d.makingPercent > 0) return { type: '%', value: d.makingPercent, label: `Percentage ${d.makingPercent}%` };
+  return null;
+}
+
+let currentCustomPriceTag = null;
+
+document.getElementById('cprice-load-btn').addEventListener('click', loadCustomPrice);
+document.getElementById('cprice-tag-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); loadCustomPrice(); }
+});
+
+async function loadCustomPrice(){
+  const input = document.getElementById('cprice-tag-input');
+  const tag = input.value.trim().toUpperCase();
+  const statusEl = document.getElementById('cprice-status');
+  const fieldsEl = document.getElementById('cprice-fields');
+  fieldsEl.style.display = 'none';
+  if (!tag) { statusEl.textContent = 'Enter a tag first.'; return; }
+
+  statusEl.textContent = 'Loading…';
+  try {
+    const [productSnap, overrideSnap] = await Promise.all([
+      get(ref(db, 'jewelryData/products/' + tag)),
+      get(ref(db, 'catalogue/tagMakingOverrides/' + tag)),
+    ]);
+    const d = productSnap.val();
+    if (!d) {
+      statusEl.textContent = `"${tag}" wasn't found in the POS — check the tag and try again.`;
+      return;
+    }
+    currentCustomPriceTag = tag;
+
+    const raw = resolveRawMakingInfo(d);
+    document.getElementById('cprice-current-heading').textContent = `${tag} — ${(d.itemName || '').trim()}`;
+    document.getElementById('cprice-current-pos').textContent = raw
+      ? `Currently in POS: ${raw.label}`
+      : 'Currently in POS: no making data found for this tag.';
+    document.getElementById('cprice-preview').textContent = 'This only changes what price shows on the catalogue — the POS keeps calculating this tag\'s real price exactly as before.';
+
+    const override = overrideSnap.val();
+    const startingPoint = override || raw; // override wins if set, otherwise start from what POS already has
+    if (startingPoint) {
+      document.getElementById('cprice-making-type').value = startingPoint.type || startingPoint.makingType || '%';
+      document.getElementById('cprice-making-value').value = (startingPoint.value ?? startingPoint.makingInput) ?? '';
+    }
+
+    statusEl.textContent = override ? 'A catalogue override is currently active for this tag.' : '';
+    fieldsEl.style.display = 'block';
+  } catch (e) {
+    console.error(e);
+    statusEl.textContent = 'Could not load — try again.';
+  }
+}
+
+document.getElementById('cprice-save-btn').addEventListener('click', async () => {
+  if (!currentCustomPriceTag) return;
+  const statusEl = document.getElementById('cprice-save-status');
+  const makingType = document.getElementById('cprice-making-type').value;
+  const makingInputRaw = document.getElementById('cprice-making-value').value;
+  const makingInput = makingInputRaw === '' ? null : parseFloat(makingInputRaw);
+
+  if (makingInput === null || isNaN(makingInput) || makingInput < 0) {
+    statusEl.textContent = 'Enter a valid making value first.';
+    return;
+  }
+
+  statusEl.textContent = 'Saving…';
+  try {
+    await update(ref(db, '/'), {
+      ['catalogue/tagMakingOverrides/' + currentCustomPriceTag]: { makingType, makingInput },
+    });
+    statusEl.textContent = 'Saved! The catalogue will pick this up on its next price sync.';
+    setTimeout(() => { statusEl.textContent = ''; }, 3000);
+    loadCustomPriceOverridesList();
+  } catch (e) {
+    console.error(e);
+    statusEl.textContent = 'Could not save — try again.';
+  }
+});
+
+document.getElementById('cprice-remove-btn').addEventListener('click', async () => {
+  if (!currentCustomPriceTag) return;
+  const statusEl = document.getElementById('cprice-save-status');
+  if (!confirm(`Remove the catalogue override for ${currentCustomPriceTag}? It'll go back to using whatever's actually in the POS.`)) return;
+  try {
+    await update(ref(db, '/'), { ['catalogue/tagMakingOverrides/' + currentCustomPriceTag]: null });
+    statusEl.textContent = 'Removed — back to the POS default.';
+    setTimeout(() => { statusEl.textContent = ''; }, 3000);
+    loadCustomPrice();
+    loadCustomPriceOverridesList();
+  } catch (e) {
+    console.error(e);
+    statusEl.textContent = 'Could not remove — try again.';
+  }
+});
+
+async function loadCustomPriceOverridesList(){
+  const listEl = document.getElementById('cprice-existing-list');
+  listEl.innerHTML = '<div class="home-banner-row"><span class="cat" style="color:var(--ink-soft); font-weight:400;">Loading…</span></div>';
+  try {
+    const snap = await get(ref(db, 'catalogue/tagMakingOverrides'));
+    const val = snap.val() || {};
+    const tags = Object.keys(val).filter(t => val[t] && val[t].makingType);
+    if (!tags.length) {
+      listEl.innerHTML = '<div class="home-banner-row"><span class="cat" style="color:var(--ink-soft); font-weight:400;">No catalogue price overrides set yet.</span></div>';
+      return;
+    }
+    listEl.innerHTML = tags.sort().map(t => {
+      const o = val[t];
+      const label = o.makingType === 'MRP' ? `MRP ₹${o.makingInput}`
+        : o.makingType === 'per pc' ? `Per Piece ₹${o.makingInput}`
+        : o.makingType === 'per g' ? `Per Gram ₹${o.makingInput}/g`
+        : o.makingType === 'wastage' ? `Wastage ${o.makingInput}%`
+        : `Percentage ${o.makingInput}%`;
+      return `
+        <div class="home-banner-row existing-row-clickable" data-tag="${t}">
+          <span class="cat" style="flex:1;">${t} <span style="color:var(--ink-soft); font-weight:400;">— ${label}</span></span>
+          <button class="manage-del-btn" data-tag="${t}" title="Remove this override">🗑</button>
+        </div>`;
+    }).join('');
+    listEl.querySelectorAll('.existing-row-clickable').forEach(row => {
+      row.addEventListener('click', e => {
+        if (e.target.closest('.manage-del-btn')) return;
+        document.getElementById('cprice-tag-input').value = row.dataset.tag;
+        loadCustomPrice();
+      });
+    });
+    listEl.querySelectorAll('.manage-del-btn').forEach(btn => {
+      btn.addEventListener('click', async e => {
+        e.stopPropagation();
+        const t = btn.dataset.tag;
+        if (!confirm(`Remove the catalogue override for ${t}?`)) return;
+        try {
+          await update(ref(db, '/'), { ['catalogue/tagMakingOverrides/' + t]: null });
+          loadCustomPriceOverridesList();
+          if (currentCustomPriceTag === t) loadCustomPrice();
+        } catch (err) {
+          console.error(err);
+          alert('Could not remove — try again.');
+        }
+      });
+    });
+  } catch (e) {
+    console.error(e);
+    listEl.innerHTML = '';
+  }
 }
 
 // ---------- All Items: a full group-wise overview of every barcode and its linked tags ----------
