@@ -3138,6 +3138,7 @@ function renderAllItemsList(){
 
   const rows = Object.keys(items)
     .filter(bc => items[bc] && typeof items[bc] === 'object') // guards against any stray null/malformed entry crashing the whole list
+    .filter(bc => getFirstPhotoUrl(items[bc])) // an empty shell with every photo deleted shouldn't still be "an item"
     .map(bc => {
       const node = items[bc];
       const tags = (Array.isArray(node.linkedBarcodes) && node.linkedBarcodes.length) ? node.linkedBarcodes : [bc];
