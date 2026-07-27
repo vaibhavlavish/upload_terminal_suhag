@@ -528,6 +528,12 @@
           <span class="placeholder" id="reel-thumb-placeholder">No image chosen yet</span>
         </div>
         <div class="field">
+          <label>Video (optional — makes it autoplay instead of just showing the thumbnail)</label>
+          <button class="btn secondary" id="reel-video-pick-btn" type="button">Choose Video</button>
+          <input type="file" id="reel-video-file" accept="video/mp4,video/*">
+          <p class="note" style="margin-top:4px;">Keep it short (a few seconds) and under 8MB — this plays automatically for every visitor who scrolls to it, so a large file costs real bandwidth every time. Skip this and the reel just shows the thumbnail with a play icon, same as before.</p>
+        </div>
+        <div class="field">
           <label>On tap</label>
           <div class="toggle-row" style="margin-bottom:10px;">
             <div class="tab-btn active" id="reel-link-type-none" style="font-size:11.5px; padding:8px 0;">Just the Reel</div>
@@ -1117,7 +1123,9 @@ async function uploadForBarcode(barcode, fullCanvas){
 // Grid thumbnails aim much lower still, ~60KB — they're only ever shown
 // small, so there's no reason to ship full-resolution detail for them.
 const TARGET_MAX_BYTES = 450 * 1024;        // ~450KB ceiling for product/tag photos
-const BANNER_TARGET_MAX_BYTES = 400 * 1024; // ~400KB ceiling for home page banners
+const BANNER_TARGET_MAX_BYTES = 400 * 1024; // ~400KB ceiling for home page banners (these span nearly the full screen width)
+const REEL_THUMB_TARGET_BYTES = 45 * 1024;  // reels only ever display as a small ~120px-wide card — no reason to pay banner-sized bandwidth for something that small
+const REEL_THUMB_MAX_WIDTH = 260;           // a bit above 2x the card's actual display width, covering retina screens without oversizing
 const THUMB_TARGET_BYTES = 110 * 1024;      // raised from 60KB — detailed jewelry photos (fine engraving, sparkle) were hitting the old quality floor and coming out visibly soft
 const THUMB_MAX_WIDTH = 480;                // raised from 320 — more actual pixels to represent fine detail before any compression happens at all
 
@@ -2089,13 +2097,31 @@ document.getElementById('reel-thumb-file').addEventListener('change', e => {
   pickBtn.textContent = '✓ ' + file.name;
 });
 
+const REEL_VIDEO_MAX_BYTES = 8 * 1024 * 1024; // a hard ceiling — this plays for every visitor who scrolls to it, so an oversized file isn't a one-time cost, it's a recurring one
+
+document.getElementById('reel-video-pick-btn').addEventListener('click', () => document.getElementById('reel-video-file').click());
+document.getElementById('reel-video-file').addEventListener('change', e => {
+  const file = e.target.files[0];
+  const pickBtn = document.getElementById('reel-video-pick-btn');
+  const statusEl = document.getElementById('reel-add-status');
+  if (!file) { pickBtn.textContent = 'Choose Video'; return; }
+  if (file.size > REEL_VIDEO_MAX_BYTES) {
+    statusEl.textContent = `That video is ${(file.size / 1024 / 1024).toFixed(1)}MB — please trim or compress it to under 8MB first.`;
+    e.target.value = '';
+    pickBtn.textContent = 'Choose Video';
+    return;
+  }
+  statusEl.textContent = '';
+  pickBtn.textContent = `✓ ${file.name} (${(file.size / 1024 / 1024).toFixed(1)}MB)`;
+});
+
 async function loadReels(){
   const list = document.getElementById('reels-list');
   try {
     const snap = await get(ref(db, 'catalogue/reels'));
     const val = snap.val() || {};
     const reels = Object.keys(val)
-      .map(id => ({ id, reelUrl: val[id].reelUrl, thumbnailUrl: val[id].thumbnailUrl, thumbnailStoragePath: val[id].thumbnailStoragePath, categoryKey: val[id].categoryKey || null, itemBarcode: val[id].itemBarcode || null, order: val[id].order || 0 }))
+      .map(id => ({ id, reelUrl: val[id].reelUrl, thumbnailUrl: val[id].thumbnailUrl, thumbnailStoragePath: val[id].thumbnailStoragePath, videoUrl: val[id].videoUrl || null, videoStoragePath: val[id].videoStoragePath || null, categoryKey: val[id].categoryKey || null, itemBarcode: val[id].itemBarcode || null, order: val[id].order || 0 }))
       .sort((a, b) => a.order - b.order);
     renderReelsList(reels);
   } catch (e) {
@@ -2112,10 +2138,11 @@ function renderReelsList(reels){
   }
   list.innerHTML = reels.map((r, i) => {
     const targetLabel = r.itemBarcode ? ('Item: ' + r.itemBarcode) : r.categoryKey ? homeCategoryLabel(r.categoryKey) : 'Not tagged — just opens the Reel';
+    const videoTag = r.videoUrl ? ' · ▶ autoplays' : '';
     return `
     <div class="home-banner-row" data-idx="${i}">
       <div class="thumb"><img src="${r.thumbnailUrl}" alt=""></div>
-      <span class="cat">${targetLabel}</span>
+      <span class="cat">${targetLabel}${videoTag}</span>
       <span class="home-banner-row-actions">
         <button class="link-move-btn" data-dir="up" ${i === 0 ? 'disabled' : ''} title="Move up">↑</button>
         <button class="link-move-btn" data-dir="down" ${i === reels.length - 1 ? 'disabled' : ''} title="Move down">↓</button>
@@ -2155,6 +2182,10 @@ async function removeReel(reel){
     if (reel.thumbnailStoragePath) {
       try { await deleteObject(storageRef(storage, reel.thumbnailStoragePath)); }
       catch (e) { console.warn('[Reels] storage object may already be gone', e); }
+    }
+    if (reel.videoStoragePath) {
+      try { await deleteObject(storageRef(storage, reel.videoStoragePath)); }
+      catch (e) { console.warn('[Reels] video storage object may already be gone', e); }
     }
     await update(ref(db, '/'), { ['catalogue/reels/' + reel.id]: null });
     loadReels();
@@ -2200,20 +2231,37 @@ document.getElementById('reel-add-btn').addEventListener('click', async () => {
   btn.disabled = true; btn.textContent = 'Uploading…';
   statusEl.textContent = '';
   try {
-    const blob = await compressImageFile(file, BANNER_TARGET_MAX_BYTES);
+    const smallCanvas = await loadFileAsCanvas(file, REEL_THUMB_MAX_WIDTH);
+    const blob = await compressCanvasToTarget(smallCanvas, REEL_THUMB_TARGET_BYTES);
     const reelId = Date.now() + '_' + Math.random().toString(36).slice(2, 8);
     const storagePath = 'catalogueImages/_reels/' + reelId + '.jpg';
     const sRef = storageRef(storage, storagePath);
     await uploadBytes(sRef, blob, { contentType: 'image/jpeg', cacheControl: 'public, max-age=31536000, immutable' });
     const thumbnailUrl = await getDownloadURL(sRef);
+
+    // The video is uploaded exactly as chosen — no client-side compression
+    // attempt, since reliably re-encoding video in the browser isn't
+    // realistic the way image compression is. The 8MB cap above is what
+    // keeps this from becoming an unbounded bandwidth cost instead.
+    let videoUrl = null, videoStoragePath = null;
+    const videoFile = document.getElementById('reel-video-file').files[0];
+    if (videoFile) {
+      videoStoragePath = 'catalogueImages/_reels/' + reelId + '_video.mp4';
+      const videoRef = storageRef(storage, videoStoragePath);
+      await uploadBytes(videoRef, videoFile, { contentType: videoFile.type || 'video/mp4', cacheControl: 'public, max-age=31536000, immutable' });
+      videoUrl = await getDownloadURL(videoRef);
+    }
+
     await update(ref(db, '/'), {
-      ['catalogue/reels/' + reelId]: { reelUrl, thumbnailUrl, thumbnailStoragePath: storagePath, categoryKey, itemBarcode, order: Date.now() }
+      ['catalogue/reels/' + reelId]: { reelUrl, thumbnailUrl, thumbnailStoragePath: storagePath, videoUrl, videoStoragePath, categoryKey, itemBarcode, order: Date.now() }
     });
     urlInput.value = '';
     fileInput.value = '';
     document.getElementById('reel-thumb-thumb').innerHTML = '';
     document.getElementById('reel-thumb-placeholder').style.display = 'block';
     document.getElementById('reel-thumb-pick-btn').textContent = 'Choose Photo';
+    document.getElementById('reel-video-file').value = '';
+    document.getElementById('reel-video-pick-btn').textContent = 'Choose Video';
     document.getElementById('reel-item-barcode-input').value = '';
     loadReels();
   } catch (e) {
