@@ -590,6 +590,14 @@
             <option value="">No size chart linked</option>
           </select>
         </div>
+        <div class="field" style="display:flex; align-items:center; gap:8px;">
+          <input type="checkbox" id="desc-scarcity-enabled" style="width:auto;">
+          <label for="desc-scarcity-enabled" style="margin:0;">Show an "Only X Left" badge on the catalogue</label>
+        </div>
+        <div class="field">
+          <label>Number to show (your own call — not tied to actual stock count)</label>
+          <input type="number" id="desc-scarcity-count" min="1" step="1" placeholder="e.g. 3">
+        </div>
         <button class="btn" id="desc-group-save-btn">Save Group Details (This Group Only)</button>
         <button class="btn secondary" id="desc-group-bulk-apply-btn" type="button" style="display:none; margin-top:8px;">Apply to All in Category</button>
         <p class="link-status" id="desc-group-save-status"></p>
@@ -2078,6 +2086,8 @@ async function loadGroupDetails(){
     document.getElementById('desc-show-weight').checked = !!node.showWeight;
     document.getElementById('desc-purity').value = node.purity || '';
     document.getElementById('desc-group-remarks').value = node.groupRemarks || '';
+    document.getElementById('desc-scarcity-enabled').checked = !!node.scarcityEnabled;
+    document.getElementById('desc-scarcity-count').value = node.scarcityCount || '';
     await populateSizeChartDropdown(node.sizeChartId || '');
     if (myToken !== groupDetailsRequestToken) return;
     document.getElementById('desc-group-mode-label').textContent = `Editing barcode: ${barcode} (its own override — separate from any category default)`;
@@ -2185,6 +2195,8 @@ document.getElementById('desc-group-category-filter').addEventListener('change',
     document.getElementById('desc-show-weight').checked = !!cat.showWeight;
     document.getElementById('desc-purity').value = cat.purity || '';
     document.getElementById('desc-group-remarks').value = cat.groupRemarks || '';
+    document.getElementById('desc-scarcity-enabled').checked = !!cat.scarcityEnabled;
+    document.getElementById('desc-scarcity-count').value = cat.scarcityCount || '';
     await populateSizeChartDropdown(cat.sizeChartId || '');
     if (myToken !== groupDetailsRequestToken) return; // check again — populateSizeChartDropdown is also async
 
@@ -2209,6 +2221,9 @@ document.getElementById('desc-group-save-btn').addEventListener('click', async (
   const purity = document.getElementById('desc-purity').value.trim();
   const groupRemarks = document.getElementById('desc-group-remarks').value.trim();
   const sizeChartId = document.getElementById('desc-sizechart-select').value;
+  const scarcityEnabled = document.getElementById('desc-scarcity-enabled').checked;
+  const scarcityCountRaw = document.getElementById('desc-scarcity-count').value;
+  const scarcityCount = scarcityCountRaw ? Math.max(1, parseInt(scarcityCountRaw, 10)) : null;
 
   statusEl.textContent = 'Saving…';
   try {
@@ -2218,6 +2233,8 @@ document.getElementById('desc-group-save-btn').addEventListener('click', async (
       ['catalogue/items/' + currentDescGroupBarcode + '/purity']: purity || null,
       ['catalogue/items/' + currentDescGroupBarcode + '/groupRemarks']: groupRemarks || null,
       ['catalogue/items/' + currentDescGroupBarcode + '/sizeChartId']: sizeChartId || null,
+      ['catalogue/items/' + currentDescGroupBarcode + '/scarcityEnabled']: scarcityEnabled,
+      ['catalogue/items/' + currentDescGroupBarcode + '/scarcityCount']: scarcityCount,
     });
     statusEl.textContent = 'Saved!';
     setTimeout(() => { statusEl.textContent = ''; }, 2000);
@@ -2242,6 +2259,9 @@ document.getElementById('desc-group-bulk-apply-btn').addEventListener('click', a
   const purity = document.getElementById('desc-purity').value.trim();
   const groupRemarks = document.getElementById('desc-group-remarks').value.trim();
   const sizeChartId = document.getElementById('desc-sizechart-select').value;
+  const scarcityEnabled = document.getElementById('desc-scarcity-enabled').checked;
+  const scarcityCountRaw = document.getElementById('desc-scarcity-count').value;
+  const scarcityCount = scarcityCountRaw ? Math.max(1, parseInt(scarcityCountRaw, 10)) : null;
   const label = homeCategoryLabel(currentCategoryFilterKey);
 
   if (!confirm(`Set this as the default for every item in "${label}" (currently ${currentCategoryFilterCount} item(s), and any added later)? Items with their own specific override will keep using their own value instead. Proceed?`)) return;
@@ -2249,7 +2269,7 @@ document.getElementById('desc-group-bulk-apply-btn').addEventListener('click', a
   statusEl.textContent = 'Saving category default…';
   try {
     await update(ref(db, '/'), {
-      ['catalogue/categorySettings/' + currentCategoryFilterKey]: { nameOverride, showWeight, purity, groupRemarks, sizeChartId }
+      ['catalogue/categorySettings/' + currentCategoryFilterKey]: { nameOverride, showWeight, purity, groupRemarks, sizeChartId, scarcityEnabled, scarcityCount }
     });
     statusEl.textContent = `Saved as the default for "${label}"!`;
     setTimeout(() => { statusEl.textContent = ''; }, 3000);
@@ -2390,7 +2410,7 @@ async function loadExistingGroupDetails(){
   try {
     const snap = await get(ref(db, 'catalogue/items'));
     const val = snap.val() || {};
-    const bcs = Object.keys(val).filter(bc => val[bc] && (val[bc].purity || val[bc].groupRemarks || typeof val[bc].showWeight === 'boolean' || val[bc].sizeChartId || val[bc].nameOverride));
+    const bcs = Object.keys(val).filter(bc => val[bc] && (val[bc].purity || val[bc].groupRemarks || typeof val[bc].showWeight === 'boolean' || val[bc].sizeChartId || val[bc].nameOverride || val[bc].scarcityEnabled));
     if (!bcs.length) {
       listEl.innerHTML = '<div class="home-banner-row"><span class="cat" style="color:var(--ink-soft); font-weight:400;">No individual item overrides set yet.</span></div>';
       return;
@@ -2398,7 +2418,7 @@ async function loadExistingGroupDetails(){
     listEl.innerHTML = bcs.sort().map(bc => {
       const n = val[bc];
       const itemName = n.displayName || bc;
-      const bits = [n.purity, n.showWeight ? 'weight shown' : null].filter(Boolean).join(' · ');
+      const bits = [n.purity, n.showWeight ? 'weight shown' : null, (n.scarcityEnabled && n.scarcityCount) ? `Only ${n.scarcityCount} Left` : null].filter(Boolean).join(' · ');
       return `
         <div class="home-banner-row existing-row-clickable" data-bc="${bc}">
           <span class="cat" style="flex:1;">${bc} <span style="color:var(--ink-soft); font-weight:400;">— ${itemName}</span></span>
@@ -2455,14 +2475,14 @@ async function loadExistingCategoryDefaults(){
   try {
     const snap = await get(ref(db, 'catalogue/categorySettings'));
     const val = snap.val() || {};
-    const keys = Object.keys(val).filter(k => val[k] && (val[k].purity || val[k].groupRemarks || val[k].showWeight || val[k].sizeChartId || val[k].nameOverride));
+    const keys = Object.keys(val).filter(k => val[k] && (val[k].purity || val[k].groupRemarks || val[k].showWeight || val[k].sizeChartId || val[k].nameOverride || val[k].scarcityEnabled));
     if (!keys.length) {
       listEl.innerHTML = '<div class="home-banner-row"><span class="cat" style="color:var(--ink-soft); font-weight:400;">No category defaults set yet.</span></div>';
       return;
     }
     listEl.innerHTML = keys.sort().map(k => {
       const c = val[k];
-      const bits = [c.purity, c.showWeight ? 'weight shown' : null].filter(Boolean).join(' · ');
+      const bits = [c.purity, c.showWeight ? 'weight shown' : null, (c.scarcityEnabled && c.scarcityCount) ? `Only ${c.scarcityCount} Left` : null].filter(Boolean).join(' · ');
       return `
         <div class="home-banner-row existing-row-clickable" data-key="${k}">
           <span class="cat" style="flex:1;">${homeCategoryLabel(k)}</span>
