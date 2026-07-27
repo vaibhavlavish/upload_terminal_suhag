@@ -139,6 +139,12 @@
   .summary span.count{color:var(--ink-soft); font-weight:500;}
   .file-list{background:#fff; border:1px solid #EEE3CC; border-radius:12px; overflow:hidden; margin-bottom:16px;}
   .file-row{display:flex; align-items:center; gap:10px; padding:9px 12px; font-size:13px; border-bottom:1px solid #F3ECDA;}
+  .file-row-warning{ background:#FCEEEA; }
+  .queue-warning{
+    font-size:12.5px; line-height:1.5; color:#8A3B26; background:#FCEEEA; border:1px solid #F0C9BC;
+    border-radius:9px; padding:10px 12px; margin-bottom:10px;
+  }
+  .queue-warning:empty{ display:none; }
   .file-row:last-child{border-bottom:none;}
   .file-row .barcode{font-weight:700; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
   .status-pending{background:#F0EEE9; color:var(--ink-soft);}
@@ -358,6 +364,7 @@
           <span id="summary-text">0 photos selected</span>
           <span class="count" id="summary-progress"></span>
         </div>
+        <div id="queue-warning" class="queue-warning"></div>
         <div class="file-list" id="file-list"></div>
         <button class="btn" id="upload-btn">⬆ Upload All</button>
       </div>
@@ -1201,7 +1208,7 @@ let queue = [];
 document.getElementById('pick-files-btn').addEventListener('click', () => document.getElementById('file-input-files').click());
 document.getElementById('pick-folder-btn').addEventListener('click', () => document.getElementById('file-input-folder').click());
 
-function handleFiles(fileList){
+async function handleFiles(fileList){
   const files = Array.from(fileList).filter(f => f.type.startsWith('image/'));
   // Handles photos named like "9BA.jpg", "9BA(1).jpg", "9BA (2).jpg" — the
   // "(1)"/"(2)" is just how Windows (and phones) auto-rename duplicate
@@ -1211,8 +1218,24 @@ function handleFiles(fileList){
   queue = files.map(file => {
     const nameNoExt = file.name.replace(/\.[^.]+$/, '');
     const barcode = nameNoExt.replace(/\s*\(\d+\)\s*$/, '').trim().toUpperCase();
-    return { file, barcode, status: 'pending' };
+    return { file, barcode, status: 'pending', existsInPos: null };
   });
+  renderQueue();
+
+  // Some phone gallery/photo pickers (notably Android's) don't always hand
+  // the browser your actual renamed filename — they can substitute an
+  // internal photo-library ID instead, silently. Cross-checking every parsed
+  // barcode against your real POS product list catches that immediately,
+  // rather than only finding out later once it's already in the catalogue.
+  try {
+    const snap = await get(ref(db, 'jewelryData/products'));
+    const products = snap.val() || {};
+    const known = new Set(Object.keys(products).map(k => k.toUpperCase()));
+    queue.forEach(q => { q.existsInPos = known.has(q.barcode); });
+  } catch (e) {
+    console.error(e);
+    queue.forEach(q => { q.existsInPos = null; }); // couldn't check — don't block upload over a network hiccup
+  }
   renderQueue();
 }
 document.getElementById('file-input-files').addEventListener('change', e => handleFiles(e.target.files));
@@ -1224,9 +1247,13 @@ function renderQueue(){
   document.getElementById('summary-text').textContent = queue.length + ' photo' + (queue.length===1?'':'s') + ' selected';
   const done = queue.filter(q => q.status === 'done').length;
   document.getElementById('summary-progress').textContent = done ? (done + ' of ' + queue.length + ' done') : '';
+  const unrecognizedCount = queue.filter(q => q.existsInPos === false).length;
+  document.getElementById('queue-warning').innerHTML = unrecognizedCount
+    ? `⚠️ ${unrecognizedCount} filename${unrecognizedCount === 1 ? "" : "s"} below ${unrecognizedCount === 1 ? "doesn't" : "don't"} match any barcode in your POS — check these before uploading. This usually means the phone's photo picker substituted its own file ID instead of your renamed filename; try picking the same photos from a file manager app (like Files by Google) instead of the Gallery/Photos picker.`
+    : '';
   document.getElementById('file-list').innerHTML = queue.map(q => `
-    <div class="file-row">
-      <span class="barcode">${q.barcode}</span>
+    <div class="file-row${q.existsInPos === false ? ' file-row-warning' : ''}">
+      <span class="barcode">${q.barcode}${q.existsInPos === false ? ' ⚠️' : ''}</span>
       <span class="status-pill status-${q.status}">${
         q.status === 'pending' ? 'Waiting' : q.status === 'uploading' ? 'Uploading…' : q.status === 'done' ? '✓ Done' : 'Failed'
       }</span>
