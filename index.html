@@ -171,6 +171,15 @@
   }
   .manage-del-btn:active{transform:scale(.95);}
   .manage-del-btn:disabled{opacity:.5;}
+  .main-photo-badge{
+    display:block; text-align:center; margin-top:6px; padding:5px 0; border-radius:7px;
+    background:var(--gold-soft, #F7E6C4); color:var(--ink); font-size:11.5px; font-weight:700;
+  }
+  .manage-main-btn{
+    display:block; width:100%; text-align:center; margin-top:6px; padding:5px 0; border-radius:7px;
+    background:none; border:1px solid #E6DCCB; color:var(--ink-soft); font-size:11.5px; font-weight:700; cursor:pointer;
+  }
+  .manage-main-btn:active{ background:#F7F2E7; }
 
   /* ---------- Link Items (attach multiple tags to one photo set) ---------- */
   .link-search{display:flex; gap:8px; margin-bottom:16px;}
@@ -432,6 +441,31 @@
           <button class="btn secondary" id="trending-tag-add-btn">+ Add Tag</button>
         </div>
       </div>
+
+      <div class="home-add-card">
+        <p style="margin:0 0 12px; font-weight:700; font-size:13.5px;">Category Icons</p>
+        <p class="note" style="margin-top:0;">A small custom graphic shown next to each category's name on the catalogue, instead of a product photo — good for a clean, transparent-background PNG icon. Upload one per category; categories without one just fall back to a photo automatically.</p>
+        <div class="field">
+          <label>Category</label>
+          <select id="caticon-category-select">
+            <option value="">— Select a category —</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Icon image (PNG recommended — uploaded as-is, transparency preserved)</label>
+          <button class="btn secondary" id="caticon-pick-btn" type="button">Choose Image</button>
+          <input type="file" id="caticon-file-input" accept="image/png,image/*" style="display:none;">
+          <div class="home-add-preview" id="caticon-preview">
+            <div class="thumb" id="caticon-thumb" style="background:repeating-conic-gradient(#e9e9e9 0% 25%, #fff 0% 50%) 50% / 14px 14px;"></div>
+            <span class="placeholder" id="caticon-placeholder">No image chosen yet</span>
+          </div>
+        </div>
+        <button class="btn" id="caticon-upload-btn">Upload Icon</button>
+        <p class="link-status" id="caticon-status"></p>
+      </div>
+
+      <p class="section-label" style="margin-top:10px;">Category Icons Already Set</p>
+      <div class="home-banner-list" id="caticon-existing-list"></div>
 
       <div class="home-banner-list" id="home-banner-list"></div>
 
@@ -810,7 +844,7 @@ function switchTab(name){
   document.getElementById('tab-reverify').classList.toggle('active', name==='reverify');
   document.getElementById('tab-allitems').classList.toggle('active', name==='allitems');
   document.getElementById('tab-manage').classList.toggle('active', name==='manage');
-  if (name === 'home') { loadHomeCategories(); loadHomeBanners(); loadMarqueeText(); loadTrendingList(); }
+  if (name === 'home') { loadHomeCategories(); loadHomeBanners(); loadMarqueeText(); loadTrendingList(); loadCatIconCategories(); loadExistingCatIcons(); }
   if (name === 'reviews') loadGoogleReviewsForManagement();
   if (name === 'desc') { loadExistingTagDescriptions(); loadExistingGroupDetails(); loadExistingCategoryDefaults(); loadGroupCategoryFilter(); }
   if (name === 'link') loadExistingLinkedGroups();
@@ -1522,6 +1556,134 @@ function moveTrendingTag(idx, delta){
   [currentTrendingList[idx], currentTrendingList[target]] = [currentTrendingList[target], currentTrendingList[idx]];
   renderTrendingList();
   saveTrendingList();
+}
+
+// ---------- Category Icons: a custom graphic shown next to each category name ----------
+// Uploaded as-is, deliberately NOT run through the usual JPEG compression
+// pipeline — these are meant to be small, aesthetic graphics (often a
+// transparent-background PNG), and converting to JPEG would flatten that
+// transparency onto a solid background, ruining the whole point of using a
+// clean icon instead of a product photo.
+const CATICON_MAX_BYTES = 1.5 * 1024 * 1024; // generous for a simple graphic; well under Storage concerns
+
+async function loadCatIconCategories(){
+  const select = document.getElementById('caticon-category-select');
+  const previousValue = select.value;
+  try {
+    const snap = await get(ref(db, 'catalogue/items'));
+    const items = snap.val() || {};
+    const keys = new Set();
+    Object.values(items).forEach(node => {
+      if (node && node.available && node.displayName) keys.add(homeCategoryKey(node.displayName));
+    });
+    const sortedKeys = Array.from(keys).sort((a, b) => homeCategoryLabel(a).localeCompare(homeCategoryLabel(b)));
+    select.innerHTML = '<option value="">— Select a category —</option>' +
+      sortedKeys.map(k => `<option value="${k.replace(/"/g,'&quot;')}">${homeCategoryLabel(k)}</option>`).join('');
+    if (sortedKeys.includes(previousValue)) select.value = previousValue;
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+document.getElementById('caticon-pick-btn').addEventListener('click', () => document.getElementById('caticon-file-input').click());
+
+let catIconPickedFile = null;
+document.getElementById('caticon-file-input').addEventListener('change', e => {
+  catIconPickedFile = e.target.files[0] || null;
+  const thumb = document.getElementById('caticon-thumb');
+  const placeholder = document.getElementById('caticon-placeholder');
+  const btn = document.getElementById('caticon-pick-btn');
+  if (!catIconPickedFile) { thumb.innerHTML = ''; placeholder.style.display = 'block'; btn.textContent = 'Choose Image'; return; }
+  // The checkerboard background behind the preview (set in the HTML above)
+  // shows through any transparent areas, same trick image editors use, so
+  // you can immediately see whether the transparency actually came through.
+  thumb.innerHTML = `<img src="${URL.createObjectURL(catIconPickedFile)}" alt="" style="width:100%; height:100%; object-fit:contain;">`;
+  placeholder.style.display = 'none';
+  btn.textContent = '✓ ' + catIconPickedFile.name;
+});
+
+document.getElementById('caticon-upload-btn').addEventListener('click', async () => {
+  const statusEl = document.getElementById('caticon-status');
+  const key = document.getElementById('caticon-category-select').value;
+  if (!key) { statusEl.textContent = 'Select a category first.'; return; }
+  if (!catIconPickedFile) { statusEl.textContent = 'Choose an image first.'; return; }
+  if (catIconPickedFile.size > CATICON_MAX_BYTES) {
+    statusEl.textContent = 'That file is a bit large for an icon — try something under 1.5MB.';
+    return;
+  }
+
+  const btn = document.getElementById('caticon-upload-btn');
+  btn.disabled = true; btn.textContent = 'Uploading…';
+  statusEl.textContent = '';
+  try {
+    const ext = catIconPickedFile.type === 'image/png' ? 'png' : (catIconPickedFile.name.split('.').pop() || 'png');
+    const storagePath = 'catalogueImages/_categoryIcons/' + key + '.' + ext;
+    const sRef = storageRef(storage, storagePath);
+    // Uploaded exactly as chosen — no canvas round-trip, no recompression,
+    // so a transparent PNG stays transparent.
+    await uploadBytes(sRef, catIconPickedFile, {
+      contentType: catIconPickedFile.type || 'image/png',
+      cacheControl: 'public, max-age=31536000, immutable',
+    });
+    const url = await getDownloadURL(sRef);
+    await update(ref(db, '/'), {
+      ['catalogue/categoryIcons/' + key]: { imageUrl: url, storagePath }
+    });
+
+    document.getElementById('caticon-thumb').innerHTML = '';
+    document.getElementById('caticon-placeholder').style.display = 'block';
+    document.getElementById('caticon-pick-btn').textContent = 'Choose Image';
+    document.getElementById('caticon-file-input').value = '';
+    catIconPickedFile = null;
+    statusEl.textContent = 'Saved!';
+    setTimeout(() => { statusEl.textContent = ''; }, 2500);
+    loadExistingCatIcons();
+  } catch (e) {
+    console.error(e);
+    statusEl.textContent = 'Upload failed — try again.';
+  }
+  btn.disabled = false; btn.textContent = 'Upload Icon';
+});
+
+async function loadExistingCatIcons(){
+  const listEl = document.getElementById('caticon-existing-list');
+  listEl.innerHTML = '<div class="home-banner-row"><span class="cat" style="color:var(--ink-soft); font-weight:400;">Loading…</span></div>';
+  try {
+    const snap = await get(ref(db, 'catalogue/categoryIcons'));
+    const val = snap.val() || {};
+    const keys = Object.keys(val).filter(k => val[k] && val[k].imageUrl);
+    if (!keys.length) {
+      listEl.innerHTML = '<div class="home-banner-row"><span class="cat" style="color:var(--ink-soft); font-weight:400;">No category icons set yet.</span></div>';
+      return;
+    }
+    listEl.innerHTML = keys.sort().map(k => `
+      <div class="home-banner-row" data-key="${k}">
+        <div class="thumb" style="background:repeating-conic-gradient(#e9e9e9 0% 25%, #fff 0% 50%) 50% / 10px 10px;"><img src="${val[k].imageUrl}" alt="" style="width:100%; height:100%; object-fit:contain;"></div>
+        <span class="cat" style="flex:1;">${homeCategoryLabel(k)}</span>
+        <button class="manage-del-btn" data-key="${k}" title="Remove this category's icon">🗑</button>
+      </div>`).join('');
+    listEl.querySelectorAll('.manage-del-btn').forEach(btn => {
+      btn.addEventListener('click', () => deleteCatIcon(btn.dataset.key, val[btn.dataset.key]));
+    });
+  } catch (e) {
+    console.error(e);
+    listEl.innerHTML = '';
+  }
+}
+
+async function deleteCatIcon(key, entry){
+  if (!confirm(`Remove the icon for "${homeCategoryLabel(key)}"? It'll fall back to a product photo automatically.`)) return;
+  try {
+    if (entry && entry.storagePath) {
+      try { await deleteObject(storageRef(storage, entry.storagePath)); }
+      catch (e) { console.warn('[Category Icons] storage file may already be gone', e); }
+    }
+    await update(ref(db, '/'), { ['catalogue/categoryIcons/' + key]: null });
+    loadExistingCatIcons();
+  } catch (e) {
+    console.error(e);
+    alert('Could not remove — try again.');
+  }
 }
 
 // ---------- Home Page: banner management ----------
@@ -3088,7 +3250,7 @@ async function loadManagePhotos(){
       return;
     }
     statusEl.textContent = entries.length + ' photo' + (entries.length === 1 ? '' : 's') + ' for ' + barcode;
-    renderManageGrid(barcode, entries);
+    renderManageGrid(barcode, entries, node.mainPhotoId || null);
 
     copyLinkBtn.style.display = 'block';
     copyLinkBtn.onclick = () => copyLinkToClipboard(CATALOGUE_BASE_URL + '?item=' + encodeURIComponent(barcode), statusEl);
@@ -3098,8 +3260,9 @@ async function loadManagePhotos(){
   }
 }
 
-function renderManageGrid(barcode, entries){
+function renderManageGrid(barcode, entries, mainPhotoId){
   const grid = document.getElementById('manage-grid');
+  const showMainControl = entries.length > 1; // nothing to choose between with just one photo
   grid.innerHTML = entries.map((entry, i) => {
     const statusLabel = entry.format === 'nested'
       ? (entry.hiddenAt ? '<span class="hidden-tag">Hidden</span>' : 'Live')
@@ -3107,6 +3270,16 @@ function renderManageGrid(barcode, entries){
     const noFileWarning = !entry.storagePath
       ? '<div class="meta" style="padding-top:0;color:var(--err);font-weight:600;">No file path saved — Storage file won\'t auto-delete</div>'
       : '';
+    // Legacy flat-format photos (imgId: null) don't fit the main-photo model
+    // — there's nothing to pick between for a barcode still on the old
+    // single-photo format, so the control only shows for nested entries.
+    const isMain = entry.imgId && entry.imgId === mainPhotoId;
+    let mainControl = '';
+    if (showMainControl && entry.imgId) {
+      mainControl = isMain
+        ? '<span class="main-photo-badge">★ Main Photo</span>'
+        : '<button class="manage-main-btn" title="Show this one first on the catalogue">☆ Set as Main</button>';
+    }
     return `
       <div class="manage-card" data-idx="${i}">
         <div class="thumb"><img src="${entry.imageUrl}" alt=""></div>
@@ -3114,6 +3287,7 @@ function renderManageGrid(barcode, entries){
           <span>${statusLabel}</span>
           <button class="manage-del-btn" title="Delete this photo">🗑 Delete</button>
         </div>
+        ${mainControl}
         ${noFileWarning}
       </div>
     `;
@@ -3122,7 +3296,19 @@ function renderManageGrid(barcode, entries){
   grid.querySelectorAll('.manage-card').forEach(card => {
     const entry = entries[Number(card.dataset.idx)];
     card.querySelector('.manage-del-btn').addEventListener('click', () => deleteManagePhoto(barcode, entry, card));
+    const mainBtn = card.querySelector('.manage-main-btn');
+    if (mainBtn) mainBtn.addEventListener('click', () => setMainPhoto(barcode, entry.imgId));
   });
+}
+
+async function setMainPhoto(barcode, imgId){
+  try {
+    await update(ref(db, '/'), { ['catalogue/items/' + barcode + '/mainPhotoId']: imgId });
+    loadManagePhotos();
+  } catch (e) {
+    console.error(e);
+    alert('Could not set main photo — try again.');
+  }
 }
 
 async function deleteManagePhoto(barcode, entry, cardEl){
@@ -3144,7 +3330,12 @@ async function deleteManagePhoto(barcode, entry, cardEl){
     }
 
     if (entry.format === 'nested') {
-      await update(ref(db, '/'), { ['catalogue/items/' + barcode + '/images/' + entry.imgId]: null });
+      const updates = { ['catalogue/items/' + barcode + '/images/' + entry.imgId]: null };
+      const currentMainSnap = await get(ref(db, 'catalogue/items/' + barcode + '/mainPhotoId'));
+      if (currentMainSnap.val() === entry.imgId) {
+        updates['catalogue/items/' + barcode + '/mainPhotoId'] = null;
+      }
+      await update(ref(db, '/'), updates);
     } else {
       // Flat format: only clear the flat fields, leave any sibling `images`
       // node (if this barcode also has nested-format photos) untouched.
