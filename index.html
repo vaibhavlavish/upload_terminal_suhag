@@ -508,6 +508,44 @@
       </div>
 
       <p class="note">These are the attractive lead images customers see first when they open the catalogue. Tapping one takes them straight into whichever category — or specific item — you pick above. Categories are pulled from what's actually live in the catalogue right now, so upload &amp; link your stock first if a category you expect isn't listed yet.</p>
+
+      <p class="section-label" style="margin-top:22px;">Instagram Reels</p>
+      <p class="note" style="margin-top:0;">Feature a Reel on your catalogue's home screen. Tag it to a specific item or a category and tapping it jumps straight there — leave it untagged and tapping it just opens the Reel itself.</p>
+      <div class="home-banner-list" id="reels-list"></div>
+
+      <div class="home-add-card">
+        <div class="field">
+          <label>Reel link</label>
+          <input type="text" id="reel-url-input" autocomplete="off" placeholder="https://www.instagram.com/reel/…">
+        </div>
+        <div class="field">
+          <label>Thumbnail (a screenshot from the Reel works well)</label>
+          <button class="btn secondary" id="reel-thumb-pick-btn" type="button">Choose Photo</button>
+          <input type="file" id="reel-thumb-file" accept="image/*">
+        </div>
+        <div class="home-add-preview" id="reel-thumb-preview">
+          <div class="thumb" id="reel-thumb-thumb"></div>
+          <span class="placeholder" id="reel-thumb-placeholder">No image chosen yet</span>
+        </div>
+        <div class="field">
+          <label>On tap</label>
+          <div class="toggle-row" style="margin-bottom:10px;">
+            <div class="tab-btn active" id="reel-link-type-none" style="font-size:11.5px; padding:8px 0;">Just the Reel</div>
+            <div class="tab-btn" id="reel-link-type-category" style="font-size:11.5px; padding:8px 0;">A Category</div>
+            <div class="tab-btn" id="reel-link-type-item" style="font-size:11.5px; padding:8px 0;">A Specific Item</div>
+          </div>
+          <div id="reel-link-category-field" style="display:none;">
+            <select id="reel-category-select">
+              <option value="all">Shop All (full catalogue)</option>
+            </select>
+          </div>
+          <div id="reel-link-item-field" style="display:none;">
+            <input type="text" id="reel-item-barcode-input" autocomplete="off" placeholder="Enter the item's tag/barcode (e.g. GCH1)">
+          </div>
+        </div>
+        <button class="btn" id="reel-add-btn">+ Add Reel</button>
+        <p class="link-status" id="reel-add-status"></p>
+      </div>
     </div>
 
     <!-- REVIEWS TAB (hide unwanted Google reviews from the catalogue) -->
@@ -909,7 +947,7 @@ function switchTab(name){
   document.getElementById('tab-allitems').classList.toggle('active', name==='allitems');
   document.getElementById('tab-customprice').classList.toggle('active', name==='customprice');
   document.getElementById('tab-manage').classList.toggle('active', name==='manage');
-  if (name === 'home') { loadHomeCategories(); loadHomeBanners(); loadMarqueeText(); loadTrendingList(); loadCatIconCategories(); loadExistingCatIcons(); }
+  if (name === 'home') { loadHomeCategories(); loadHomeBanners(); loadMarqueeText(); loadTrendingList(); loadCatIconCategories(); loadExistingCatIcons(); loadReels(); loadReelCategories(); }
   if (name === 'reviews') loadGoogleReviewsForManagement();
   if (name === 'desc') { loadExistingTagDescriptions(); loadExistingGroupDetails(); loadExistingCategoryDefaults(); loadGroupCategoryFilter(); }
   if (name === 'link') loadExistingLinkedGroups();
@@ -2001,6 +2039,188 @@ document.getElementById('home-add-btn').addEventListener('click', async () => {
     statusEl.textContent = 'Upload failed — try again.';
   }
   btn.disabled = false; btn.textContent = '+ Add Banner';
+});
+
+// ---------- Instagram Reels: featured Reels on the home screen, optionally tagged to an item or category ----------
+let reelLinkType = 'none';
+
+function setReelLinkType(type){
+  reelLinkType = type;
+  document.getElementById('reel-link-type-none').classList.toggle('active', type === 'none');
+  document.getElementById('reel-link-type-category').classList.toggle('active', type === 'category');
+  document.getElementById('reel-link-type-item').classList.toggle('active', type === 'item');
+  document.getElementById('reel-link-category-field').style.display = type === 'category' ? 'block' : 'none';
+  document.getElementById('reel-link-item-field').style.display = type === 'item' ? 'block' : 'none';
+}
+document.getElementById('reel-link-type-none').addEventListener('click', () => setReelLinkType('none'));
+document.getElementById('reel-link-type-category').addEventListener('click', () => setReelLinkType('category'));
+document.getElementById('reel-link-type-item').addEventListener('click', () => setReelLinkType('item'));
+
+async function loadReelCategories(){
+  const select = document.getElementById('reel-category-select');
+  const previousValue = select.value;
+  try {
+    const snap = await get(ref(db, 'catalogue/items'));
+    const items = snap.val() || {};
+    const keys = new Set();
+    Object.keys(items).forEach(bc => {
+      const node = items[bc];
+      if (node && node.available && node.displayName) keys.add(homeCategoryKey(node.displayName));
+    });
+    const sortedKeys = Array.from(keys).sort((a, b) => homeCategoryLabel(a).localeCompare(homeCategoryLabel(b)));
+    select.innerHTML = '<option value="all">Shop All (full catalogue)</option>' +
+      sortedKeys.map(k => `<option value="${k.replace(/"/g,'&quot;')}">${homeCategoryLabel(k)}</option>`).join('');
+    if (sortedKeys.includes(previousValue) || previousValue === 'all') select.value = previousValue;
+  } catch (e) {
+    console.error('[Reels] could not load categories', e);
+  }
+}
+
+document.getElementById('reel-thumb-pick-btn').addEventListener('click', () => document.getElementById('reel-thumb-file').click());
+document.getElementById('reel-thumb-file').addEventListener('change', e => {
+  const file = e.target.files[0];
+  const thumb = document.getElementById('reel-thumb-thumb');
+  const placeholder = document.getElementById('reel-thumb-placeholder');
+  const pickBtn = document.getElementById('reel-thumb-pick-btn');
+  if (!file) { thumb.innerHTML = ''; placeholder.style.display = 'block'; pickBtn.textContent = 'Choose Photo'; return; }
+  const url = URL.createObjectURL(file);
+  thumb.innerHTML = `<img src="${url}" alt="">`;
+  placeholder.style.display = 'none';
+  pickBtn.textContent = '✓ ' + file.name;
+});
+
+async function loadReels(){
+  const list = document.getElementById('reels-list');
+  try {
+    const snap = await get(ref(db, 'catalogue/reels'));
+    const val = snap.val() || {};
+    const reels = Object.keys(val)
+      .map(id => ({ id, reelUrl: val[id].reelUrl, thumbnailUrl: val[id].thumbnailUrl, thumbnailStoragePath: val[id].thumbnailStoragePath, categoryKey: val[id].categoryKey || null, itemBarcode: val[id].itemBarcode || null, order: val[id].order || 0 }))
+      .sort((a, b) => a.order - b.order);
+    renderReelsList(reels);
+  } catch (e) {
+    console.error('[Reels] could not load', e);
+    list.innerHTML = '';
+  }
+}
+
+function renderReelsList(reels){
+  const list = document.getElementById('reels-list');
+  if (!reels.length) {
+    list.innerHTML = '<div class="home-banner-row"><span class="cat" style="color:var(--ink-soft); font-weight:400;">No Reels featured yet — add one below.</span></div>';
+    return;
+  }
+  list.innerHTML = reels.map((r, i) => {
+    const targetLabel = r.itemBarcode ? ('Item: ' + r.itemBarcode) : r.categoryKey ? homeCategoryLabel(r.categoryKey) : 'Not tagged — just opens the Reel';
+    return `
+    <div class="home-banner-row" data-idx="${i}">
+      <div class="thumb"><img src="${r.thumbnailUrl}" alt=""></div>
+      <span class="cat">${targetLabel}</span>
+      <span class="home-banner-row-actions">
+        <button class="link-move-btn" data-dir="up" ${i === 0 ? 'disabled' : ''} title="Move up">↑</button>
+        <button class="link-move-btn" data-dir="down" ${i === reels.length - 1 ? 'disabled' : ''} title="Move down">↓</button>
+        <button class="manage-del-btn" title="Delete this Reel">🗑</button>
+      </span>
+    </div>
+  `;
+  }).join('');
+
+  list.querySelectorAll('.home-banner-row').forEach(row => {
+    const idx = Number(row.dataset.idx);
+    const moveBtns = row.querySelectorAll('.link-move-btn');
+    moveBtns[0].addEventListener('click', () => moveReel(reels, idx, -1));
+    moveBtns[1].addEventListener('click', () => moveReel(reels, idx, 1));
+    row.querySelector('.manage-del-btn').addEventListener('click', () => removeReel(reels[idx]));
+  });
+}
+
+async function moveReel(reels, idx, delta){
+  const target = idx + delta;
+  if (target < 0 || target >= reels.length) return;
+  const a = reels[idx], b = reels[target];
+  try {
+    await update(ref(db, '/'), {
+      ['catalogue/reels/' + a.id + '/order']: b.order,
+      ['catalogue/reels/' + b.id + '/order']: a.order,
+    });
+    loadReels();
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+async function removeReel(reel){
+  if (!confirm('Remove this Reel from the catalogue? This cannot be undone.')) return;
+  try {
+    if (reel.thumbnailStoragePath) {
+      try { await deleteObject(storageRef(storage, reel.thumbnailStoragePath)); }
+      catch (e) { console.warn('[Reels] storage object may already be gone', e); }
+    }
+    await update(ref(db, '/'), { ['catalogue/reels/' + reel.id]: null });
+    loadReels();
+  } catch (e) {
+    console.error(e);
+    alert('Could not remove — try again.');
+  }
+}
+
+document.getElementById('reel-add-btn').addEventListener('click', async () => {
+  const urlInput = document.getElementById('reel-url-input');
+  const fileInput = document.getElementById('reel-thumb-file');
+  const file = fileInput.files[0];
+  const statusEl = document.getElementById('reel-add-status');
+  const reelUrl = urlInput.value.trim();
+
+  if (!reelUrl) { statusEl.textContent = 'Paste the Reel link first.'; return; }
+  if (!/^https?:\/\/(www\.)?instagram\.com\//i.test(reelUrl)) {
+    statusEl.textContent = 'That doesn\'t look like an Instagram link — check and try again.';
+    return;
+  }
+  if (!file) { statusEl.textContent = 'Choose a thumbnail image first.'; return; }
+
+  let categoryKey = null, itemBarcode = null;
+  if (reelLinkType === 'item') {
+    itemBarcode = document.getElementById('reel-item-barcode-input').value.trim().toUpperCase();
+    if (!itemBarcode) { statusEl.textContent = 'Enter the item\'s barcode.'; return; }
+    // Same safety check as home banners — confirm this barcode actually has
+    // photos before tagging a Reel to it, so tapping it never leads nowhere.
+    try {
+      const snap = await get(ref(db, 'catalogue/items/' + itemBarcode));
+      if (!snap.val()) { statusEl.textContent = 'No photos found for ' + itemBarcode + ' — upload &amp; link it first.'; return; }
+    } catch (e) {
+      console.error(e);
+      statusEl.textContent = 'Could not verify that barcode — try again.';
+      return;
+    }
+  } else if (reelLinkType === 'category') {
+    categoryKey = document.getElementById('reel-category-select').value;
+  }
+
+  const btn = document.getElementById('reel-add-btn');
+  btn.disabled = true; btn.textContent = 'Uploading…';
+  statusEl.textContent = '';
+  try {
+    const blob = await compressImageFile(file, BANNER_TARGET_MAX_BYTES);
+    const reelId = Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+    const storagePath = 'catalogueImages/_reels/' + reelId + '.jpg';
+    const sRef = storageRef(storage, storagePath);
+    await uploadBytes(sRef, blob, { contentType: 'image/jpeg', cacheControl: 'public, max-age=31536000, immutable' });
+    const thumbnailUrl = await getDownloadURL(sRef);
+    await update(ref(db, '/'), {
+      ['catalogue/reels/' + reelId]: { reelUrl, thumbnailUrl, thumbnailStoragePath: storagePath, categoryKey, itemBarcode, order: Date.now() }
+    });
+    urlInput.value = '';
+    fileInput.value = '';
+    document.getElementById('reel-thumb-thumb').innerHTML = '';
+    document.getElementById('reel-thumb-placeholder').style.display = 'block';
+    document.getElementById('reel-thumb-pick-btn').textContent = 'Choose Photo';
+    document.getElementById('reel-item-barcode-input').value = '';
+    loadReels();
+  } catch (e) {
+    console.error(e);
+    statusEl.textContent = 'Upload failed — try again.';
+  }
+  btn.disabled = false; btn.textContent = '+ Add Reel';
 });
 
 // ---------- Google Reviews management: hide unwanted ones from the catalogue ----------
