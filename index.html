@@ -661,6 +661,26 @@
         <p class="link-status" id="desc-group-save-status"></p>
       </div>
 
+      <p class="section-label" style="margin-top:22px;">Edit Category Defaults</p>
+      <p class="note" style="margin-top:0; margin-bottom:12px;">Set or update the display label for an entire category — this will appear as the chip text on the catalogue for all items in this category.</p>
+      
+      <div class="field">
+        <label>Select a category</label>
+        <select id="desc-category-select">
+          <option value="">— Select a category —</option>
+        </select>
+      </div>
+      
+      <div id="desc-category-edit-fields" style="display:none;">
+        <div class="field">
+          <label>Category chip label on catalogue</label>
+          <input type="text" id="desc-category-chip-label" autocomplete="off" placeholder="Leave blank to show the category name as-is">
+          <p class="note" style="margin-top:4px;">Only renames the chip text customers see — items still group under this category exactly the same either way.</p>
+        </div>
+        <button class="btn" id="desc-category-save-btn">Save Category Defaults</button>
+        <p class="link-status" id="desc-category-save-status"></p>
+      </div>
+
       <p class="section-label" style="margin-top:10px;">Category Defaults Already Set</p>
       <div class="home-banner-list" id="desc-category-defaults-list"></div>
 
@@ -976,7 +996,7 @@ function switchTab(name){
   document.getElementById('tab-manage').classList.toggle('active', name==='manage');
   if (name === 'home') { loadHomeCategories(); loadHomeBanners(); loadMarqueeText(); loadTrendingList(); loadCatIconCategories(); loadExistingCatIcons(); loadReels(); loadReelCategories(); }
   if (name === 'reviews') loadGoogleReviewsForManagement();
-  if (name === 'desc') { loadExistingTagDescriptions(); loadExistingGroupDetails(); loadExistingCategoryDefaults(); loadGroupCategoryFilter(); }
+  if (name === 'desc') { loadExistingTagDescriptions(); loadExistingGroupDetails(); loadExistingCategoryDefaults(); loadGroupCategoryFilter(); loadCategoryDefaultsDropdown(); }
   if (name === 'link') loadExistingLinkedGroups();
   if (name === 'sizecharts') loadSizeCharts();
   if (name === 'reverify') loadReverificationQueue();
@@ -2655,6 +2675,74 @@ document.getElementById('desc-group-bulk-apply-btn').addEventListener('click', a
     statusEl.textContent = 'Could not save — try again.';
   }
 });
+
+// -------- Category Defaults Editor --------
+let currentCategoryDefaultsKey = null;
+
+document.getElementById('desc-category-select').addEventListener('change', async (e) => {
+  const key = e.target.value;
+  const fieldsEl = document.getElementById('desc-category-edit-fields');
+  const statusEl = document.getElementById('desc-category-save-status');
+  
+  if (!key) {
+    fieldsEl.style.display = 'none';
+    currentCategoryDefaultsKey = null;
+    return;
+  }
+  
+  statusEl.textContent = 'Loading…';
+  try {
+    const snap = await get(ref(db, 'catalogue/categorySettings/' + key));
+    const settings = snap.val() || {};
+    document.getElementById('desc-category-chip-label').value = settings.categoryLabel || '';
+    statusEl.textContent = '';
+    fieldsEl.style.display = 'block';
+    currentCategoryDefaultsKey = key;
+  } catch (e) {
+    console.error(e);
+    statusEl.textContent = 'Could not load settings — try again.';
+  }
+});
+
+document.getElementById('desc-category-save-btn').addEventListener('click', async () => {
+  if (!currentCategoryDefaultsKey) return;
+  const statusEl = document.getElementById('desc-category-save-status');
+  const categoryLabel = document.getElementById('desc-category-chip-label').value.trim();
+  
+  statusEl.textContent = 'Saving…';
+  try {
+    await update(ref(db, '/'), {
+      ['catalogue/categorySettings/' + currentCategoryDefaultsKey + '/categoryLabel']: categoryLabel || null
+    });
+    statusEl.textContent = 'Saved!';
+    setTimeout(() => { statusEl.textContent = ''; }, 2000);
+    loadExistingCategoryDefaults();
+  } catch (e) {
+    console.error(e);
+    statusEl.textContent = 'Could not save — try again.';
+  }
+});
+
+async function loadCategoryDefaultsDropdown(){
+  const select = document.getElementById('desc-category-select');
+  try {
+    const snap = await get(ref(db, 'catalogue/items'));
+    const items = snap.val() || {};
+    const keys = new Set();
+    Object.keys(items).forEach(bc => {
+      const node = items[bc];
+      if (node && node.available && node.displayName) {
+        const key = (node.displayName || '').toString().trim().toLowerCase();
+        if (key) keys.add(key);
+      }
+    });
+    const sortedKeys = Array.from(keys).sort();
+    select.innerHTML = '<option value="">— Select a category —</option>' +
+      sortedKeys.map(k => `<option value="${k.replace(/"/g,'&quot;')}">${k.replace(/</g,'&lt;').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}</option>`).join('');
+  } catch (e) {
+    console.error('[Category Defaults] could not load categories', e);
+  }
+}
 
 document.getElementById('desc-tag-load-btn').addEventListener('click', loadTagDescription);
 document.getElementById('desc-tag-barcode-input').addEventListener('keydown', e => {
