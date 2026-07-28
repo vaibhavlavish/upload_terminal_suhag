@@ -594,6 +594,14 @@
           <label>Description for this tag</label>
           <textarea id="desc-tag-text" rows="3" style="width:100%; padding:10px 12px; border:1.5px solid #E6DCCB; border-radius:9px; font-size:14px; font-family:'Work Sans',sans-serif;"></textarea>
         </div>
+        <div class="field" style="display:flex; align-items:center; gap:8px; margin-top:14px;">
+          <input type="checkbox" id="desc-tag-scarcity-enabled" style="width:auto;">
+          <label for="desc-tag-scarcity-enabled" style="margin:0;">Show an "Only X Left" badge on the catalogue for this tag</label>
+        </div>
+        <div class="field" id="desc-tag-scarcity-field" style="display:none;">
+          <label>Number to show (your own call — not tied to actual stock count)</label>
+          <input type="number" id="desc-tag-scarcity-count" min="1" step="1" placeholder="e.g. 2">
+        </div>
         <button class="btn" id="desc-tag-save-btn">Save Tag Description</button>
         <p class="link-status" id="desc-tag-save-status"></p>
       </div>
@@ -648,14 +656,7 @@
             <option value="">No size chart linked</option>
           </select>
         </div>
-        <div class="field" style="display:flex; align-items:center; gap:8px;">
-          <input type="checkbox" id="desc-scarcity-enabled" style="width:auto;">
-          <label for="desc-scarcity-enabled" style="margin:0;">Show an "Only X Left" badge on the catalogue</label>
-        </div>
-        <div class="field">
-          <label>Number to show (your own call — not tied to actual stock count)</label>
-          <input type="number" id="desc-scarcity-count" min="1" step="1" placeholder="e.g. 3">
-        </div>
+        <p class="note" style="margin-top:10px;">⭐ <b>Scarcity badges are now tag-specific</b> — set them in the "Tag-Specific Description" section above, so each tag can show its own "Only X Left" count (or none at all).</p>
         <button class="btn" id="desc-group-save-btn">Save Group Details (This Group Only)</button>
         <button class="btn secondary" id="desc-group-bulk-apply-btn" type="button" style="display:none; margin-top:8px;">Apply to All in Category</button>
         <p class="link-status" id="desc-group-save-status"></p>
@@ -2745,6 +2746,10 @@ async function loadCategoryDefaultsDropdown(){
 }
 
 document.getElementById('desc-tag-load-btn').addEventListener('click', loadTagDescription);
+document.getElementById('desc-tag-scarcity-enabled').addEventListener('change', () => {
+  document.getElementById('desc-tag-scarcity-field').style.display = 
+    document.getElementById('desc-tag-scarcity-enabled').checked ? 'block' : 'none';
+});
 document.getElementById('desc-tag-barcode-input').addEventListener('keydown', e => {
   if (e.key === 'Enter') { e.preventDefault(); loadTagDescription(); }
 });
@@ -2761,9 +2766,9 @@ document.getElementById('desc-tag-close-btn').addEventListener('click', () => {
 // Older saved tag descriptions are a plain string; newer ones are an object
 // with weight/purity/name overrides too. This normalizes either into one shape.
 function normalizeTagDesc(raw){
-  if (!raw) return { text: '', showWeight: false, purity: '', nameOverride: '' };
-  if (typeof raw === 'string') return { text: raw, showWeight: false, purity: '', nameOverride: '' };
-  return { text: raw.text || '', showWeight: !!raw.showWeight, purity: raw.purity || '', nameOverride: raw.nameOverride || '' };
+  if (!raw) return { text: '', showWeight: false, purity: '', nameOverride: '', scarcityEnabled: false, scarcityCount: 0 };
+  if (typeof raw === 'string') return { text: raw, showWeight: false, purity: '', nameOverride: '', scarcityEnabled: false, scarcityCount: 0 };
+  return { text: raw.text || '', showWeight: !!raw.showWeight, purity: raw.purity || '', nameOverride: raw.nameOverride || '', scarcityEnabled: !!raw.scarcityEnabled, scarcityCount: raw.scarcityCount || 0 };
 }
 
 async function loadTagDescription(){
@@ -2787,6 +2792,9 @@ async function loadTagDescription(){
     document.getElementById('desc-tag-text').value = desc.text;
     document.getElementById('desc-tag-show-weight').checked = desc.showWeight;
     document.getElementById('desc-tag-purity').value = desc.purity;
+    document.getElementById('desc-tag-scarcity-enabled').checked = desc.scarcityEnabled || false;
+    document.getElementById('desc-tag-scarcity-count').value = desc.scarcityCount || '';
+    document.getElementById('desc-tag-scarcity-field').style.display = desc.scarcityEnabled ? 'block' : 'none';
 
     const product = productSnap.val();
     if (product) {
@@ -2813,12 +2821,14 @@ document.getElementById('desc-tag-save-btn').addEventListener('click', async () 
   const text = document.getElementById('desc-tag-text').value.trim();
   const showWeight = document.getElementById('desc-tag-show-weight').checked;
   const purity = document.getElementById('desc-tag-purity').value.trim();
+  const scarcityEnabled = document.getElementById('desc-tag-scarcity-enabled').checked;
+  const scarcityCount = scarcityEnabled ? (parseInt(document.getElementById('desc-tag-scarcity-count').value) || 0) : null;
 
   statusEl.textContent = 'Saving…';
   try {
-    const hasAnything = text || showWeight || purity || nameOverride;
+    const hasAnything = text || showWeight || purity || nameOverride || scarcityEnabled;
     await update(ref(db, '/'), {
-      ['catalogue/tagDescriptions/' + currentDescTag]: hasAnything ? { text, showWeight, purity, nameOverride } : null,
+      ['catalogue/tagDescriptions/' + currentDescTag]: hasAnything ? { text, showWeight, purity, nameOverride, scarcityEnabled, scarcityCount } : null,
     });
     statusEl.textContent = 'Saved!';
     setTimeout(() => { statusEl.textContent = ''; }, 2000);
