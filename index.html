@@ -302,6 +302,7 @@
       <div class="tab-btn" id="tab-reverify-btn">🔍 Reverify</div>
       <div class="tab-btn" id="tab-allitems-btn">🗂 All Items</div>
       <div class="tab-btn" id="tab-customprice-btn">🧮 Custom Price</div>
+      <div class="tab-btn" id="tab-customcat-btn">🏷 Custom Categories</div>
       <div class="tab-btn" id="tab-manage-btn">🗑 Manage</div>
     </div>
 
@@ -840,6 +841,23 @@
       <div class="home-banner-list" id="cprice-existing-list"></div>
     </div>
 
+    <!-- CUSTOM CATEGORIES TAB (manually curated collections, independent of item names) -->
+    <div class="tab-pane" id="tab-customcat">
+      <p class="note" style="margin-top:0;">A category you fully control — give it any name, then add exactly the barcodes you want in it. An item can be in its normal category AND any number of custom ones at the same time; nothing here changes how normal categories work.</p>
+
+      <div class="home-add-card">
+        <div class="field">
+          <label>New category name</label>
+          <input type="text" id="customcat-new-name" autocomplete="off" placeholder="e.g. Wedding Collection">
+        </div>
+        <button class="btn" id="customcat-create-btn">+ Create Category</button>
+        <p class="link-status" id="customcat-create-status"></p>
+      </div>
+
+      <p class="section-label" style="margin-top:10px;">Your Custom Categories</p>
+      <div class="home-banner-list" id="customcat-list"></div>
+    </div>
+
     <!-- MANAGE TAB (delete existing catalogue photos) -->
     <div class="tab-pane" id="tab-manage">
       <div class="manage-search">
@@ -927,6 +945,7 @@ document.getElementById('tab-aienhance-btn').addEventListener('click', () => swi
 document.getElementById('tab-reverify-btn').addEventListener('click', () => switchTab('reverify'));
 document.getElementById('tab-allitems-btn').addEventListener('click', () => switchTab('allitems'));
 document.getElementById('tab-customprice-btn').addEventListener('click', () => switchTab('customprice'));
+document.getElementById('tab-customcat-btn').addEventListener('click', () => switchTab('customcat'));
 document.getElementById('tab-manage-btn').addEventListener('click', () => switchTab('manage'));
 function switchTab(name){
   document.getElementById('tab-scan-btn').classList.toggle('active', name==='scan');
@@ -940,6 +959,7 @@ function switchTab(name){
   document.getElementById('tab-reverify-btn').classList.toggle('active', name==='reverify');
   document.getElementById('tab-allitems-btn').classList.toggle('active', name==='allitems');
   document.getElementById('tab-customprice-btn').classList.toggle('active', name==='customprice');
+  document.getElementById('tab-customcat-btn').classList.toggle('active', name==='customcat');
   document.getElementById('tab-manage-btn').classList.toggle('active', name==='manage');
   document.getElementById('tab-scan').classList.toggle('active', name==='scan');
   document.getElementById('tab-bulk').classList.toggle('active', name==='bulk');
@@ -952,6 +972,7 @@ function switchTab(name){
   document.getElementById('tab-reverify').classList.toggle('active', name==='reverify');
   document.getElementById('tab-allitems').classList.toggle('active', name==='allitems');
   document.getElementById('tab-customprice').classList.toggle('active', name==='customprice');
+  document.getElementById('tab-customcat').classList.toggle('active', name==='customcat');
   document.getElementById('tab-manage').classList.toggle('active', name==='manage');
   if (name === 'home') { loadHomeCategories(); loadHomeBanners(); loadMarqueeText(); loadTrendingList(); loadCatIconCategories(); loadExistingCatIcons(); loadReels(); loadReelCategories(); }
   if (name === 'reviews') loadGoogleReviewsForManagement();
@@ -961,6 +982,7 @@ function switchTab(name){
   if (name === 'reverify') loadReverificationQueue();
   if (name === 'allitems') loadAllItemsOverview();
   if (name === 'customprice') loadCustomPriceOverridesList();
+  if (name === 'customcat') loadCustomCategories();
   if (name === 'aienhance') { loadAiEnhancePrompt(); loadAiEnhanceBatchCategories(); }
   if (name !== 'scan') resetCapture();
 }
@@ -3446,6 +3468,202 @@ function jumpToManage(bc){
   switchTab('manage');
   document.getElementById('manage-barcode-input').value = bc;
   loadManagePhotos();
+}
+
+// ---------- Custom Categories: manually curated collections, independent of item names ----------
+document.getElementById('customcat-create-btn').addEventListener('click', async () => {
+  const input = document.getElementById('customcat-new-name');
+  const statusEl = document.getElementById('customcat-create-status');
+  const name = input.value.trim();
+  if (!name) { statusEl.textContent = 'Give it a name first.'; return; }
+
+  const btn = document.getElementById('customcat-create-btn');
+  btn.disabled = true;
+  try {
+    const id = Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+    await update(ref(db, '/'), {
+      ['catalogue/customCategories/' + id]: { name, order: Date.now() }
+    });
+    input.value = '';
+    statusEl.textContent = 'Created!';
+    setTimeout(() => { statusEl.textContent = ''; }, 2000);
+    loadCustomCategories();
+  } catch (e) {
+    console.error(e);
+    statusEl.textContent = 'Could not create — try again.';
+  }
+  btn.disabled = false;
+});
+
+let expandedCustomCatId = null;
+
+async function loadCustomCategories(){
+  const list = document.getElementById('customcat-list');
+  list.innerHTML = '<div class="home-banner-row"><span class="cat" style="color:var(--ink-soft); font-weight:400;">Loading…</span></div>';
+  try {
+    const snap = await get(ref(db, 'catalogue/customCategories'));
+    const val = snap.val() || {};
+    const cats = Object.keys(val)
+      .map(id => ({ id, name: val[id].name || 'Untitled', barcodes: Object.keys(val[id].barcodes || {}), order: val[id].order || 0 }))
+      .sort((a, b) => a.order - b.order);
+    renderCustomCategoriesList(cats);
+  } catch (e) {
+    console.error(e);
+    list.innerHTML = '';
+  }
+}
+
+function renderCustomCategoriesList(cats){
+  const list = document.getElementById('customcat-list');
+  if (!cats.length) {
+    list.innerHTML = '<div class="home-banner-row"><span class="cat" style="color:var(--ink-soft); font-weight:400;">No custom categories yet — create one above.</span></div>';
+    return;
+  }
+
+  list.innerHTML = cats.map((cat, i) => {
+    const isOpen = cat.id === expandedCustomCatId;
+    return `
+      <div class="allitems-group">
+        <div class="home-banner-row" data-id="${cat.id}" style="cursor:pointer;">
+          <span class="cat" style="flex:1;">${cat.name.replace(/</g,'&lt;')} <span style="color:var(--ink-soft); font-weight:400;">— ${cat.barcodes.length} item${cat.barcodes.length === 1 ? '' : 's'}</span></span>
+          <button class="link-move-btn" data-dir="up" data-id="${cat.id}" ${i === 0 ? 'disabled' : ''} title="Move up">↑</button>
+          <button class="link-move-btn" data-dir="down" data-id="${cat.id}" ${i === cats.length - 1 ? 'disabled' : ''} title="Move down">↓</button>
+          <span class="allitems-chevron">${isOpen ? '▾' : '▸'}</span>
+        </div>
+        <div class="allitems-group-body" style="display:${isOpen ? 'block' : 'none'}; padding:12px;">
+          <div class="field">
+            <label>Rename category</label>
+            <div style="display:flex; gap:8px;">
+              <input type="text" class="customcat-rename-input" data-id="${cat.id}" value="${cat.name.replace(/"/g,'&quot;')}" autocomplete="off" style="flex:1;">
+              <button class="btn secondary customcat-rename-btn" data-id="${cat.id}" style="width:auto; padding:0 14px;">Save</button>
+            </div>
+          </div>
+          <div class="field">
+            <label>Add an item</label>
+            <div style="display:flex; gap:8px;">
+              <input type="text" class="customcat-add-barcode-input" data-id="${cat.id}" placeholder="Enter barcode" autocomplete="off" style="flex:1;">
+              <button class="btn customcat-add-barcode-btn" data-id="${cat.id}" style="width:auto; padding:0 14px;">Add</button>
+            </div>
+            <p class="link-status customcat-add-status" data-id="${cat.id}"></p>
+          </div>
+          <div class="customcat-items-list" data-id="${cat.id}">
+            ${cat.barcodes.length
+              ? cat.barcodes.sort().map(bc => `
+                <div class="home-banner-row" style="padding:6px 0;">
+                  <span class="cat" style="flex:1; font-size:12.5px;">${bc}</span>
+                  <button class="manage-del-btn customcat-remove-barcode-btn" data-id="${cat.id}" data-bc="${bc}" title="Remove from this category">🗑</button>
+                </div>`).join('')
+              : '<p class="note" style="margin:6px 0 0;">No items in this category yet.</p>'}
+          </div>
+          <button class="btn secondary customcat-delete-btn" data-id="${cat.id}" style="margin-top:12px; background:var(--err); color:#fff; border-color:var(--err);">Delete This Category</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  list.querySelectorAll('.home-banner-row[data-id]').forEach(row => {
+    row.addEventListener('click', e => {
+      if (e.target.closest('.link-move-btn')) return;
+      const id = row.dataset.id;
+      expandedCustomCatId = expandedCustomCatId === id ? null : id;
+      loadCustomCategories();
+    });
+  });
+  list.querySelectorAll('.link-move-btn').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      moveCustomCategory(cats, btn.dataset.id, btn.dataset.dir === 'up' ? -1 : 1);
+    });
+  });
+  list.querySelectorAll('.customcat-rename-btn').forEach(btn => {
+    btn.addEventListener('click', () => renameCustomCategory(btn.dataset.id));
+  });
+  list.querySelectorAll('.customcat-add-barcode-btn').forEach(btn => {
+    btn.addEventListener('click', () => addBarcodeToCustomCategory(btn.dataset.id));
+  });
+  list.querySelectorAll('.customcat-remove-barcode-btn').forEach(btn => {
+    btn.addEventListener('click', () => removeBarcodeFromCustomCategory(btn.dataset.id, btn.dataset.bc));
+  });
+  list.querySelectorAll('.customcat-delete-btn').forEach(btn => {
+    btn.addEventListener('click', () => deleteCustomCategory(btn.dataset.id));
+  });
+}
+
+async function moveCustomCategory(cats, id, delta){
+  const idx = cats.findIndex(c => c.id === id);
+  const target = idx + delta;
+  if (target < 0 || target >= cats.length) return;
+  const a = cats[idx], b = cats[target];
+  try {
+    await update(ref(db, '/'), {
+      ['catalogue/customCategories/' + a.id + '/order']: b.order,
+      ['catalogue/customCategories/' + b.id + '/order']: a.order,
+    });
+    loadCustomCategories();
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+async function renameCustomCategory(id){
+  const input = document.querySelector(`.customcat-rename-input[data-id="${id}"]`);
+  const name = input.value.trim();
+  if (!name) { alert('Category name can\'t be blank.'); return; }
+  try {
+    await update(ref(db, '/'), { ['catalogue/customCategories/' + id + '/name']: name });
+    loadCustomCategories();
+  } catch (e) {
+    console.error(e);
+    alert('Could not rename — try again.');
+  }
+}
+
+async function addBarcodeToCustomCategory(id){
+  const input = document.querySelector(`.customcat-add-barcode-input[data-id="${id}"]`);
+  const statusEl = document.querySelector(`.customcat-add-status[data-id="${id}"]`);
+  const barcode = input.value.trim().toUpperCase();
+  if (!barcode) { statusEl.textContent = 'Enter a barcode first.'; return; }
+
+  statusEl.textContent = 'Checking…';
+  try {
+    // Same safety check used everywhere else in this app before linking a
+    // barcode to something — confirms it actually has photos in the
+    // catalogue first, so adding it here can never point at nothing.
+    const snap = await get(ref(db, 'catalogue/items/' + barcode));
+    if (!snap.val()) {
+      statusEl.textContent = 'No photos found for ' + barcode + ' — upload & link it first.';
+      return;
+    }
+    await update(ref(db, '/'), { ['catalogue/customCategories/' + id + '/barcodes/' + barcode]: true });
+    input.value = '';
+    statusEl.textContent = '';
+    loadCustomCategories();
+  } catch (e) {
+    console.error(e);
+    statusEl.textContent = 'Could not add — try again.';
+  }
+}
+
+async function removeBarcodeFromCustomCategory(id, barcode){
+  try {
+    await update(ref(db, '/'), { ['catalogue/customCategories/' + id + '/barcodes/' + barcode]: null });
+    loadCustomCategories();
+  } catch (e) {
+    console.error(e);
+    alert('Could not remove — try again.');
+  }
+}
+
+async function deleteCustomCategory(id){
+  if (!confirm('Delete this entire custom category? The items themselves are untouched — this only removes the category and its chip from the catalogue.')) return;
+  try {
+    await update(ref(db, '/'), { ['catalogue/customCategories/' + id]: null });
+    expandedCustomCatId = null;
+    loadCustomCategories();
+  } catch (e) {
+    console.error(e);
+    alert('Could not delete — try again.');
+  }
 }
 
 // ---------- Custom Price: catalogue-only making-charge override, per exact tag ----------
