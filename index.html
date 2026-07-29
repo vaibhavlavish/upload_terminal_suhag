@@ -492,6 +492,7 @@
           <label>Opens when tapped</label>
           <div class="toggle-row" style="margin-bottom:10px;">
             <div class="tab-btn active" id="home-link-type-category" style="font-size:12.5px; padding:8px 0;">A Category</div>
+            <div class="tab-btn" id="home-link-type-custom" style="font-size:12.5px; padding:8px 0;">A Custom Category</div>
             <div class="tab-btn" id="home-link-type-item" style="font-size:12.5px; padding:8px 0;">A Specific Item</div>
           </div>
           <div id="home-link-category-field">
@@ -499,6 +500,11 @@
               <option value="all">Shop All (full catalogue)</option>
             </select>
             <button class="btn secondary" id="home-copy-category-link-btn" type="button" style="margin-top:8px; font-size:12.5px; padding:8px 0;">🔗 Copy Link to This Category</button>
+          </div>
+          <div id="home-link-custom-field" style="display:none;">
+            <select id="home-custom-category-select">
+              <option value="">— No custom categories yet —</option>
+            </select>
           </div>
           <div id="home-link-item-field" style="display:none;">
             <input type="text" id="home-item-barcode-input" autocomplete="off" placeholder="Enter the item's tag/barcode (e.g. GCH1)">
@@ -579,6 +585,7 @@
       <div id="desc-grp-fields" style="display:none;">
         <div style="display:flex; justify-content:space-between; align-items:center;">
           <p class="section-label" id="desc-grp-mode-label" style="margin:0;"></p>
+          <button class="close-section-btn" id="desc-grp-close-btn" type="button" title="Close">✕</button>
         </div>
         <div class="field">
           <label>Display name on catalogue</label>
@@ -1939,17 +1946,42 @@ async function loadHomeCategories(){
   }
 }
 
-// Toggle between "opens a category" vs "opens one specific item" for the
-// banner being added.
+// Toggle between "opens a category" vs "opens a custom category" vs "opens
+// one specific item" for the banner being added.
 let homeLinkType = 'category';
 document.getElementById('home-link-type-category').addEventListener('click', () => setHomeLinkType('category'));
+document.getElementById('home-link-type-custom').addEventListener('click', () => setHomeLinkType('custom'));
 document.getElementById('home-link-type-item').addEventListener('click', () => setHomeLinkType('item'));
 function setHomeLinkType(type){
   homeLinkType = type;
   document.getElementById('home-link-type-category').classList.toggle('active', type === 'category');
+  document.getElementById('home-link-type-custom').classList.toggle('active', type === 'custom');
   document.getElementById('home-link-type-item').classList.toggle('active', type === 'item');
   document.getElementById('home-link-category-field').style.display = type === 'category' ? 'block' : 'none';
+  document.getElementById('home-link-custom-field').style.display = type === 'custom' ? 'block' : 'none';
   document.getElementById('home-link-item-field').style.display = type === 'item' ? 'block' : 'none';
+  if (type === 'custom') populateHomeCustomCategoryDropdown();
+}
+
+// Populates the "A Custom Category" dropdown from whatever custom
+// categories already exist (created in the Custom Categories tab) — a
+// banner can only link to one that already exists, same as how it can
+// only link to a real stock category or a real uploaded item.
+async function populateHomeCustomCategoryDropdown(){
+  const select = document.getElementById('home-custom-category-select');
+  const previousValue = select.value;
+  try {
+    const snap = await get(ref(db, 'catalogue/customCategories'));
+    const val = snap.val() || {};
+    const cats = Object.keys(val).map(id => ({ id, name: (val[id] && val[id].name) || 'Untitled' }));
+    cats.sort((a, b) => a.name.localeCompare(b.name));
+    select.innerHTML = cats.length
+      ? cats.map(c => `<option value="${c.id}">${c.name.replace(/</g,'&lt;')}</option>`).join('')
+      : '<option value="">— No custom categories yet —</option>';
+    if (cats.some(c => c.id === previousValue)) select.value = previousValue;
+  } catch (e) {
+    console.error('[Home] could not load custom categories', e);
+  }
 }
 
 document.getElementById('home-copy-category-link-btn').addEventListener('click', () => {
@@ -1976,19 +2008,34 @@ document.getElementById('home-banner-file').addEventListener('change', e => {
 async function loadHomeBanners(){
   const list = document.getElementById('home-banner-list');
   try {
-    const snap = await get(ref(db, 'catalogue/homeBanners'));
-    const val = snap.val() || {};
+    const [bannerSnap, customSnap] = await Promise.all([
+      get(ref(db, 'catalogue/homeBanners')),
+      get(ref(db, 'catalogue/customCategories')),
+    ]);
+    const val = bannerSnap.val() || {};
+    const customCats = customSnap.val() || {};
     const banners = Object.keys(val)
       .map(id => ({ id, imageUrl: val[id].imageUrl, storagePath: val[id].storagePath, categoryKey: val[id].categoryKey || 'all', itemBarcode: val[id].itemBarcode || null, order: val[id].order || 0 }))
       .sort((a, b) => a.order - b.order);
-    renderHomeBannerList(banners);
+    renderHomeBannerList(banners, customCats);
   } catch (e) {
     console.error('[Home] could not load banners', e);
     list.innerHTML = '';
   }
 }
 
-function renderHomeBannerList(banners){
+// Turns a stored categoryKey into what should actually show in a list row —
+// a custom category's own name if it's a "custom:<id>" key, otherwise the
+// normal stock-category label.
+function resolveCategoryDisplayLabel(categoryKey, customCats){
+  if (categoryKey && categoryKey.startsWith('custom:')) {
+    const id = categoryKey.slice(7);
+    return (customCats[id] && customCats[id].name) || 'Untitled custom category';
+  }
+  return homeCategoryLabel(categoryKey);
+}
+
+function renderHomeBannerList(banners, customCats){
   const list = document.getElementById('home-banner-list');
   if (!banners.length) {
     list.innerHTML = '<div class="home-banner-row"><span class="cat" style="color:var(--ink-soft); font-weight:400;">No home page banners yet — add one below.</span></div>';
@@ -1997,7 +2044,7 @@ function renderHomeBannerList(banners){
   list.innerHTML = banners.map((b, i) => `
     <div class="home-banner-row" data-idx="${i}">
       <div class="thumb"><img src="${b.imageUrl}" alt=""></div>
-      <span class="cat">${b.itemBarcode ? ('Item: ' + b.itemBarcode) : homeCategoryLabel(b.categoryKey)}</span>
+      <span class="cat">${b.itemBarcode ? ('Item: ' + b.itemBarcode) : resolveCategoryDisplayLabel(b.categoryKey, customCats || {})}</span>
       <span class="home-banner-row-actions">
         <button class="link-move-btn" data-dir="up" ${i === 0 ? 'disabled' : ''} title="Move up">↑</button>
         <button class="link-move-btn" data-dir="down" ${i === banners.length - 1 ? 'disabled' : ''} title="Move down">↓</button>
@@ -2065,6 +2112,10 @@ document.getElementById('home-add-btn').addEventListener('click', async () => {
       statusEl.textContent = 'Could not verify that barcode — try again.';
       return;
     }
+  } else if (homeLinkType === 'custom') {
+    const customId = document.getElementById('home-custom-category-select').value;
+    if (!customId) { statusEl.textContent = 'Choose a custom category first (or create one in the Custom Categories tab).'; return; }
+    categoryKey = 'custom:' + customId;
   } else {
     categoryKey = document.getElementById('home-category-select').value;
   }
@@ -2450,6 +2501,14 @@ async function loadGroupDropdown(){
 let currentGroupEditKey = '';
 let currentGroupEditCount = 0;
 let groupEditRequestToken = 0; // guards against a slow async load finishing after a newer one started
+
+document.getElementById('desc-grp-close-btn').addEventListener('click', () => {
+  groupEditRequestToken++; // invalidate anything still in flight
+  document.getElementById('desc-grp-fields').style.display = 'none';
+  document.getElementById('desc-group-category-filter').value = '';
+  document.getElementById('desc-grp-status').textContent = '';
+  currentGroupEditKey = '';
+});
 
 document.getElementById('desc-group-category-filter').addEventListener('change', async () => {
   const key = document.getElementById('desc-group-category-filter').value;
