@@ -1152,6 +1152,8 @@ const REEL_THUMB_TARGET_BYTES = 45 * 1024;  // reels only ever display as a smal
 const REEL_THUMB_MAX_WIDTH = 260;           // a bit above 2x the card's actual display width, covering retina screens without oversizing
 const THUMB_TARGET_BYTES = 110 * 1024;      // raised from 60KB — detailed jewelry photos (fine engraving, sparkle) were hitting the old quality floor and coming out visibly soft
 const THUMB_MAX_WIDTH = 480;                // raised from 320 — more actual pixels to represent fine detail before any compression happens at all
+const CATICON_TARGET_BYTES = 150 * 1024;    // a category icon only ever displays at ~78px in a circle — even at 3x retina density that's ~234px, so there's no benefit to shipping more detail than this
+const CATICON_MAX_WIDTH = 300;              // generous headroom above the ~234px retina display size
 
 function canvasToBlobAt(canvas, quality){
   return new Promise((resolve, reject) => {
@@ -1419,6 +1421,49 @@ function resizedCanvasFromImg(img, maxW){
   canvas.height = Math.round(img.height * scale);
   canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
   return canvas;
+}
+
+// True only if the canvas actually has see-through pixels — a PNG can be
+// PNG-format without ever using transparency, and flattening THAT to a much
+// smaller JPEG is safe. Only a genuinely transparent source needs to stay
+// lossless, since JPEG has no alpha channel at all.
+function canvasHasTransparency(canvas){
+  const ctx = canvas.getContext('2d');
+  const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  for (let i = 3; i < data.length; i += 4) {
+    if (data[i] < 255) return true;
+  }
+  return false;
+}
+
+function canvasToPngBlob(canvas){
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('Compression failed')), 'image/png');
+  });
+}
+
+// Category icons only ever render tiny (a ~78px circle), so this resizes
+// aggressively regardless of how large the source is. Transparent PNGs stay
+// PNG (lossless, alpha preserved) — the size win there comes purely from
+// the resize. Everything else compresses to JPEG, which shrinks much
+// further since these are typically full photos, not simple graphics.
+async function compressCategoryIconFile(file){
+  const img = new Image();
+  const url = URL.createObjectURL(file);
+  try {
+    await new Promise((resolve, reject) => {
+      img.onload = resolve;
+      img.onerror = () => reject(new Error('Could not read image'));
+      img.src = url;
+    });
+    const canvas = resizedCanvasFromImg(img, CATICON_MAX_WIDTH);
+    if (canvasHasTransparency(canvas)) {
+      return { blob: await canvasToPngBlob(canvas), ext: 'png' };
+    }
+    return { blob: await compressCanvasToTarget(canvas, CATICON_TARGET_BYTES), ext: 'jpg' };
+  } finally {
+    URL.revokeObjectURL(url);
+  }
 }
 
 document.getElementById('upload-btn').addEventListener('click', async () => {
@@ -1743,19 +1788,45 @@ async function loadCatIconCategories(){
 
 document.getElementById('caticon-pick-btn').addEventListener('click', () => document.getElementById('caticon-file-input').click());
 
-let catIconPickedFile = null;
-document.getElementById('caticon-file-input').addEventListener('change', e => {
-  catIconPickedFile = e.target.files[0] || null;
+let catIconPickedFile = null; // the compressed blob that actually gets uploaded
+let catIconPickedExt = 'jpg';
+let catIconOriginalName = '';
+
+document.getElementById('caticon-file-input').addEventListener('change', async e => {
+  const rawFile = e.target.files[0] || null;
   const thumb = document.getElementById('caticon-thumb');
   const placeholder = document.getElementById('caticon-placeholder');
   const btn = document.getElementById('caticon-pick-btn');
-  if (!catIconPickedFile) { thumb.innerHTML = ''; placeholder.style.display = 'block'; btn.textContent = 'Choose Image'; return; }
-  // The checkerboard background behind the preview (set in the HTML above)
-  // shows through any transparent areas, same trick image editors use, so
-  // you can immediately see whether the transparency actually came through.
-  thumb.innerHTML = `<img src="${URL.createObjectURL(catIconPickedFile)}" alt="" style="width:100%; height:100%; object-fit:contain;">`;
-  placeholder.style.display = 'none';
-  btn.textContent = '✓ ' + catIconPickedFile.name;
+  const statusEl = document.getElementById('caticon-status');
+
+  if (!rawFile) { catIconPickedFile = null; thumb.innerHTML = ''; placeholder.style.display = 'block'; btn.textContent = 'Choose Image'; return; }
+
+  catIconOriginalName = rawFile.name;
+  btn.disabled = true; btn.textContent = 'Compressing…';
+  statusEl.textContent = '';
+  try {
+    // Resized and compressed right away, regardless of how large the
+    // source is — a category icon only ever displays tiny, so there's no
+    // reason to make you manually shrink a photo first. A genuinely
+    // transparent PNG is detected and kept lossless; everything else
+    // (including a non-transparent PNG) becomes a much smaller JPEG.
+    const { blob, ext } = await compressCategoryIconFile(rawFile);
+    catIconPickedFile = blob;
+    catIconPickedExt = ext;
+    // The checkerboard background behind the preview (set in the HTML above)
+    // shows through any transparent areas, same trick image editors use, so
+    // you can immediately see whether the transparency actually came through.
+    thumb.innerHTML = `<img src="${URL.createObjectURL(blob)}" alt="" style="width:100%; height:100%; object-fit:contain;">`;
+    placeholder.style.display = 'none';
+    btn.textContent = '✓ ' + catIconOriginalName;
+    statusEl.textContent = `Compressed to ${(blob.size / 1024).toFixed(0)}KB.`;
+    setTimeout(() => { statusEl.textContent = ''; }, 2500);
+  } catch (err) {
+    console.error(err);
+    catIconPickedFile = null;
+    statusEl.textContent = 'Could not process that image — try a different file.';
+  }
+  btn.disabled = false;
 });
 
 document.getElementById('caticon-upload-btn').addEventListener('click', async () => {
@@ -1764,7 +1835,7 @@ document.getElementById('caticon-upload-btn').addEventListener('click', async ()
   if (!key) { statusEl.textContent = 'Select a category first.'; return; }
   if (!catIconPickedFile) { statusEl.textContent = 'Choose an image first.'; return; }
   if (catIconPickedFile.size > CATICON_MAX_BYTES) {
-    statusEl.textContent = 'That file is a bit large for an icon — try something under 1.5MB.';
+    statusEl.textContent = 'Even compressed, that image is still too large — try a simpler source image.';
     return;
   }
 
@@ -1772,13 +1843,10 @@ document.getElementById('caticon-upload-btn').addEventListener('click', async ()
   btn.disabled = true; btn.textContent = 'Uploading…';
   statusEl.textContent = '';
   try {
-    const ext = catIconPickedFile.type === 'image/png' ? 'png' : (catIconPickedFile.name.split('.').pop() || 'png');
-    const storagePath = 'catalogueImages/_categoryIcons/' + key + '.' + ext;
+    const storagePath = 'catalogueImages/_categoryIcons/' + key + '.' + catIconPickedExt;
     const sRef = storageRef(storage, storagePath);
-    // Uploaded exactly as chosen — no canvas round-trip, no recompression,
-    // so a transparent PNG stays transparent.
     await uploadBytes(sRef, catIconPickedFile, {
-      contentType: catIconPickedFile.type || 'image/png',
+      contentType: catIconPickedExt === 'png' ? 'image/png' : 'image/jpeg',
       cacheControl: 'public, max-age=31536000, immutable',
     });
     const url = await getDownloadURL(sRef);
