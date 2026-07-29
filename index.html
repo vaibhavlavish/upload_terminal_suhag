@@ -607,6 +607,17 @@
             <option value="">No size chart linked</option>
           </select>
         </div>
+        <div class="field">
+          <label>Merge into another category (optional)</label>
+          <select id="desc-grp-merge-into">
+            <option value="">— Don't merge — keep as its own category —</option>
+          </select>
+          <p class="note" style="margin-top:4px;">Combines this category's items into the target category on the catalogue — same chip, same defaults, automatically including items added to either later. Once merged, this category's own name/weight/purity/remarks/size chart above are ignored — edit those on the target category instead.</p>
+        </div>
+        <div class="field" style="display:flex; align-items:center; gap:8px;">
+          <input type="checkbox" id="desc-grp-hidden" style="width:auto;">
+          <label for="desc-grp-hidden" style="margin:0;">Hide this entire category from the catalogue completely</label>
+        </div>
         <button class="btn" id="desc-grp-save-btn">Save Group Defaults</button>
         <p class="link-status" id="desc-grp-save-status"></p>
       </div>
@@ -656,6 +667,14 @@
         <div class="field" id="desc-tag-scarcity-field" style="display:none;">
           <label>Number to show (your own call — not tied to actual stock count)</label>
           <input type="number" id="desc-tag-scarcity-count" min="1" step="1" placeholder="e.g. 2">
+        </div>
+        <div class="field" style="display:flex; align-items:center; gap:8px; margin-top:14px;">
+          <input type="checkbox" id="desc-tag-hidden" style="width:auto;">
+          <label for="desc-tag-hidden" style="margin:0;">Hide this item from the catalogue completely</label>
+        </div>
+        <div class="field" id="desc-tag-hide-home-field" style="display:flex; align-items:center; gap:8px;">
+          <input type="checkbox" id="desc-tag-hide-home" style="width:auto;">
+          <label for="desc-tag-hide-home" style="margin:0;">Hide only from its home category (still shows in "All" and in any custom category)</label>
         </div>
         <button class="btn" id="desc-tag-save-btn">Save Tag-Specific</button>
         <p class="link-status" id="desc-tag-save-status"></p>
@@ -2470,7 +2489,10 @@ document.getElementById('desc-group-category-filter').addEventListener('change',
     document.getElementById('desc-grp-purity').value = grp.purity || '';
     document.getElementById('desc-grp-remarks').value = grp.groupRemarks || '';
     await populateGroupSizeChartDropdown(grp.sizeChartId || '');
-    if (myToken !== groupEditRequestToken) return; // check again — populateGroupSizeChartDropdown is also async
+    await populateMergeIntoDropdown(key, grp.mergeInto || '');
+    document.getElementById('desc-grp-hidden').checked = !!grp.hidden;
+    applyMergeIntoFieldState();
+    if (myToken !== groupEditRequestToken) return; // check again — populateGroupSizeChartDropdown/populateMergeIntoDropdown are also async
 
     statusEl.textContent = `${matches.length} item${matches.length === 1 ? '' : 's'} currently in "${homeCategoryLabel(key)}".`;
     document.getElementById('desc-grp-mode-label').textContent = `Editing default for category: ${homeCategoryLabel(key)}`;
@@ -2498,6 +2520,44 @@ async function populateGroupSizeChartDropdown(selectedId){
   }
 }
 
+// Only categories that aren't themselves merged into something else can be
+// picked as a merge target — this keeps the chain exactly one level deep
+// (no A-merges-into-B-merges-into-C), so there's always one unambiguous
+// category actually holding the real settings.
+async function populateMergeIntoDropdown(excludeKey, selectedValue){
+  const select = document.getElementById('desc-grp-merge-into');
+  try {
+    const snap = await get(ref(db, 'catalogue/categorySettings'));
+    const val = snap.val() || {};
+    const itemsSnap = await get(ref(db, 'catalogue/items'));
+    const items = itemsSnap.val() || {};
+    const allKeys = new Set();
+    Object.values(items).forEach(node => {
+      if (node && node.available && node.displayName) allKeys.add(homeCategoryKey(node.displayName));
+    });
+    const rootKeys = Array.from(allKeys)
+      .filter(k => k !== excludeKey && !(val[k] && val[k].mergeInto))
+      .sort((a, b) => homeCategoryLabel(a).localeCompare(homeCategoryLabel(b)));
+    select.innerHTML = '<option value="">— Don\'t merge — keep as its own category —</option>' +
+      rootKeys.map(k => `<option value="${k.replace(/"/g,'&quot;')}">${homeCategoryLabel(k)}</option>`).join('');
+    select.value = selectedValue || '';
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+// While a merge target is set, this category's own name/weight/purity/
+// remarks/size chart are ignored by the catalogue (it inherits the
+// target's instead) — greyed out here so that's obvious rather than
+// looking like they're still in effect.
+function applyMergeIntoFieldState(){
+  const merging = !!document.getElementById('desc-grp-merge-into').value;
+  ['desc-grp-name-override', 'desc-category-label', 'desc-grp-show-weight', 'desc-grp-purity', 'desc-grp-remarks', 'desc-grp-sizechart-select'].forEach(id => {
+    document.getElementById(id).disabled = merging;
+  });
+}
+document.getElementById('desc-grp-merge-into').addEventListener('change', applyMergeIntoFieldState);
+
 // Saves Purity / Show Weight / Remarks / Size Chart / Display Name / Chip
 // Label as this category's persistent DEFAULT — every item in the category
 // inherits this automatically (including ones added to it later), unless
@@ -2512,6 +2572,8 @@ document.getElementById('desc-grp-save-btn').addEventListener('click', async () 
   const purity = document.getElementById('desc-grp-purity').value.trim();
   const groupRemarks = document.getElementById('desc-grp-remarks').value.trim();
   const sizeChartId = document.getElementById('desc-grp-sizechart-select').value;
+  const mergeInto = document.getElementById('desc-grp-merge-into').value;
+  const hidden = document.getElementById('desc-grp-hidden').checked;
   const label = homeCategoryLabel(currentGroupEditKey);
 
   if (!confirm(`Set this as the default for every item in "${label}" (currently ${currentGroupEditCount} item(s), and any added later)? Items with their own Tag-Specific entry will keep using their own value instead. Proceed?`)) return;
@@ -2519,7 +2581,7 @@ document.getElementById('desc-grp-save-btn').addEventListener('click', async () 
   statusEl.textContent = 'Saving group default…';
   try {
     await update(ref(db, '/'), {
-      ['catalogue/categorySettings/' + currentGroupEditKey]: { nameOverride, categoryLabel, showWeight, purity, groupRemarks, sizeChartId }
+      ['catalogue/categorySettings/' + currentGroupEditKey]: { nameOverride, categoryLabel, showWeight, purity, groupRemarks, sizeChartId, mergeInto: mergeInto || null, hidden }
     });
     statusEl.textContent = `Saved as the default for "${label}"!`;
     setTimeout(() => { statusEl.textContent = ''; }, 3000);
@@ -2538,7 +2600,7 @@ async function loadGroupOverridesList(){
   try {
     const snap = await get(ref(db, 'catalogue/categorySettings'));
     const val = snap.val() || {};
-    const keys = Object.keys(val).filter(k => val[k] && (val[k].purity || val[k].groupRemarks || val[k].showWeight || val[k].sizeChartId || val[k].nameOverride || val[k].categoryLabel));
+    const keys = Object.keys(val).filter(k => val[k] && (val[k].purity || val[k].groupRemarks || val[k].showWeight || val[k].sizeChartId || val[k].nameOverride || val[k].categoryLabel || val[k].mergeInto || val[k].hidden));
     if (!keys.length) {
       listEl.innerHTML = '<div class="home-banner-row"><span class="cat" style="color:var(--ink-soft); font-weight:400;">No group defaults set yet.</span></div>';
       return;
@@ -2546,7 +2608,11 @@ async function loadGroupOverridesList(){
     listEl.innerHTML = keys.sort().map(k => {
       const c = val[k];
       const heading = c.categoryLabel ? `${homeCategoryLabel(k)} → shown as "${c.categoryLabel}"` : homeCategoryLabel(k);
-      const bits = [c.purity, c.showWeight ? 'weight shown' : null].filter(Boolean).join(' · ');
+      const bits = [
+        c.hidden ? 'HIDDEN' : null,
+        c.mergeInto ? `merged into ${homeCategoryLabel(c.mergeInto)}` : null,
+        c.purity, c.showWeight ? 'weight shown' : null,
+      ].filter(Boolean).join(' · ');
       return `
         <div class="home-banner-row existing-row-clickable" data-key="${k}">
           <span class="cat" style="flex:1;">${heading}</span>
@@ -2598,6 +2664,14 @@ document.getElementById('desc-tag-scarcity-enabled').addEventListener('change', 
 });
 document.getElementById('desc-tag-barcode-input').addEventListener('keydown', e => {
   if (e.key === 'Enter') { e.preventDefault(); loadTagOverride(); }
+});
+// Once fully hidden, "hide from home category only" is moot — grey it out
+// instead of leaving two switches that could look like they disagree.
+document.getElementById('desc-tag-hidden').addEventListener('change', () => {
+  const hidden = document.getElementById('desc-tag-hidden').checked;
+  const hideHomeField = document.getElementById('desc-tag-hide-home-field');
+  document.getElementById('desc-tag-hide-home').disabled = hidden;
+  hideHomeField.style.opacity = hidden ? '0.5' : '1';
 });
 
 let currentDescTag = null;
@@ -2689,6 +2763,10 @@ async function loadTagOverride(){
     document.getElementById('desc-tag-scarcity-enabled').checked = desc.scarcityEnabled || false;
     document.getElementById('desc-tag-scarcity-count').value = desc.scarcityCount || '';
     document.getElementById('desc-tag-scarcity-field').style.display = desc.scarcityEnabled ? 'block' : 'none';
+    document.getElementById('desc-tag-hidden').checked = !!node.hidden;
+    document.getElementById('desc-tag-hide-home').checked = !!node.hideFromHomeCategory;
+    document.getElementById('desc-tag-hide-home').disabled = !!node.hidden;
+    document.getElementById('desc-tag-hide-home-field').style.opacity = node.hidden ? '0.5' : '1';
     if (myToken !== tagEditRequestToken) return;
 
     // Reference line: shows where the pre-filled values above came from —
@@ -2724,6 +2802,8 @@ document.getElementById('desc-tag-save-btn').addEventListener('click', async () 
   const sizeChartId = document.getElementById('desc-tag-sizechart-select').value;
   const scarcityEnabled = document.getElementById('desc-tag-scarcity-enabled').checked;
   const scarcityCount = scarcityEnabled ? (parseInt(document.getElementById('desc-tag-scarcity-count').value) || 0) : null;
+  const hidden = document.getElementById('desc-tag-hidden').checked;
+  const hideFromHomeCategory = document.getElementById('desc-tag-hide-home').checked;
 
   statusEl.textContent = 'Saving…';
   try {
@@ -2737,6 +2817,8 @@ document.getElementById('desc-tag-save-btn').addEventListener('click', async () 
       ['catalogue/items/' + currentDescTag + '/purity']: purity || null,
       ['catalogue/items/' + currentDescTag + '/groupRemarks']: groupRemarks || null,
       ['catalogue/items/' + currentDescTag + '/sizeChartId']: sizeChartId || null,
+      ['catalogue/items/' + currentDescTag + '/hidden']: hidden,
+      ['catalogue/items/' + currentDescTag + '/hideFromHomeCategory']: hideFromHomeCategory,
       // tagDescriptions is retired down to scarcity-only — clears any old
       // text/purity/weight/name that used to live here too, so there's a
       // single source of truth for everything except the badge.
@@ -2765,7 +2847,7 @@ async function loadTagOverridesList(){
     const items = itemsSnap.val() || {};
     const descs = descSnap.val() || {};
     const keys = new Set([
-      ...Object.keys(items).filter(bc => items[bc] && (items[bc].purity || items[bc].groupRemarks || typeof items[bc].showWeight === 'boolean' || items[bc].sizeChartId || items[bc].nameOverride)),
+      ...Object.keys(items).filter(bc => items[bc] && (items[bc].purity || items[bc].groupRemarks || typeof items[bc].showWeight === 'boolean' || items[bc].sizeChartId || items[bc].nameOverride || items[bc].hidden || items[bc].hideFromHomeCategory)),
       ...Object.keys(descs).filter(t => descs[t]),
     ]);
     if (!keys.size) {
@@ -2776,7 +2858,11 @@ async function loadTagOverridesList(){
       const n = items[k] || {};
       const d = normalizeTagDesc(descs[k]);
       const itemName = n.displayName || k;
-      const bits = [n.purity, n.showWeight ? 'weight shown' : null, (d.scarcityEnabled && d.scarcityCount) ? `Only ${d.scarcityCount} Left` : null].filter(Boolean).join(' · ');
+      const bits = [
+        n.hidden ? 'HIDDEN' : (n.hideFromHomeCategory ? 'hidden from home category' : null),
+        n.purity, n.showWeight ? 'weight shown' : null,
+        (d.scarcityEnabled && d.scarcityCount) ? `Only ${d.scarcityCount} Left` : null,
+      ].filter(Boolean).join(' · ');
       return `
         <div class="home-banner-row existing-row-clickable" data-tag="${k}">
           <span class="cat" style="flex:1;">${k} <span style="color:var(--ink-soft); font-weight:400;">— ${itemName}</span></span>
@@ -2803,6 +2889,11 @@ async function loadTagOverridesList(){
   }
 }
 
+// Note: this deliberately does NOT touch `hidden`/`hideFromHomeCategory` —
+// those are a separate moderation decision, not part of the name/weight/
+// purity override, so clearing the override here can't accidentally
+// un-hide something that was hidden on purpose. Toggle those off directly
+// (load the tag, uncheck, save) if that's actually what's wanted.
 async function deleteTagOverride(tag){
   if (!confirm(`Remove ${tag}'s tag-specific override? It'll go back to inheriting purely from its group's default (if one is set) or the plain stock name/no purity/etc.`)) return;
   try {
