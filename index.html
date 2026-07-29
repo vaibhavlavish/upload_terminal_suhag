@@ -296,14 +296,13 @@
       <div class="tab-btn" id="tab-link-btn">🔗 Link Items</div>
       <div class="tab-btn" id="tab-home-btn">🏠 Home Page</div>
       <div class="tab-btn" id="tab-reviews-btn">⭐ Reviews</div>
-      <div class="tab-btn" id="tab-desc-btn">📝 Description</div>
+      <div class="tab-btn" id="tab-desc-btn">📝 Group Defaults</div>
       <div class="tab-btn" id="tab-sizecharts-btn">📏 Size Charts</div>
       <div class="tab-btn" id="tab-aienhance-btn">✨ AI Enhance</div>
       <div class="tab-btn" id="tab-reverify-btn">🔍 Reverify</div>
-      <div class="tab-btn" id="tab-allitems-btn">🗂 All Items</div>
+      <div class="tab-btn" id="tab-tagmanage-btn">🗂 Tag Manage</div>
       <div class="tab-btn" id="tab-customprice-btn">🧮 Custom Price</div>
       <div class="tab-btn" id="tab-customcat-btn">🏷 Custom Categories</div>
-      <div class="tab-btn" id="tab-manage-btn">🗑 Manage</div>
     </div>
 
     <!-- SCAN & SHOOT TAB -->
@@ -568,12 +567,11 @@
       <div class="home-banner-list" id="reviews-mgmt-list"></div>
     </div>
 
-    <!-- DESCRIPTION TAB (two editable levels, broadest to narrowest: Group Defaults -> Tag-Specific — the raw POS stock record is the baseline underneath both, shown on the catalogue above price) -->
+    <!-- GROUP DEFAULTS TAB (category-wide defaults — Tag-Specific overrides now live in the Tag Manage tab, alongside photos) -->
     <div class="tab-pane" id="tab-desc">
-      <p class="note" style="margin-top:0;">These stack three levels deep, broadest to narrowest — each one overrides whatever came before it, field by field, only where it sets its own value: <b>POS</b> (the raw stock record — name, weight, purity as entered in your POS; the baseline when nothing below sets anything) → <b>Group</b> (every item in a category) → <b>Tag-Specific</b> (one exact barcode/tag — the narrowest, and the one that wins). Leave a field blank to keep inheriting from the level above.</p>
+      <p class="note" style="margin-top:0;">Sets the default every item in a category inherits automatically, including ones added later — <b>POS</b> (the raw stock record — name, weight, purity as entered in your POS) is the baseline underneath this; a specific barcode/tag can still override this default for itself in the <b>Tag Manage</b> tab, where photos and tag-specific details live together.</p>
 
       <p class="section-label">Group Defaults</p>
-      <p class="note" style="margin-top:0;">Applies to every item in a category automatically, including ones added later — unless a Tag-Specific entry below sets its own value instead.</p>
       <div class="field">
         <label>Select a category</label>
         <select id="desc-group-category-filter">
@@ -631,69 +629,11 @@
 
       <p class="section-label" style="margin-top:22px;">Group Defaults Already Set</p>
       <div class="home-banner-list" id="desc-category-defaults-list"></div>
-
-      <p class="section-label" style="margin-top:30px;">Tag-Specific</p>
-      <p class="note" style="margin-top:0;">Overrides the Group default above for one exact barcode/tag — the narrowest level, and the one that wins.</p>
-      <div class="link-search">
-        <input type="text" id="desc-tag-barcode-input" autocomplete="off" placeholder="Enter the tag / barcode (e.g. SBA208)">
-        <button class="btn" id="desc-tag-load-btn">Load</button>
-      </div>
-      <p class="manage-status" id="desc-tag-status"></p>
-      <p class="tag-reference-line" id="desc-tag-reference"></p>
-
-      <div id="desc-tag-fields" style="display:none;">
-        <div style="display:flex; justify-content:flex-end;">
-          <button class="close-section-btn" id="desc-tag-close-btn" type="button" title="Close">✕</button>
-        </div>
-        <div class="field">
-          <label>Display name on catalogue</label>
-          <input type="text" id="desc-tag-name" autocomplete="off" placeholder="Leave blank to use the group's item name">
-        </div>
-        <div class="field" style="display:flex; align-items:center; gap:8px;">
-          <input type="checkbox" id="desc-tag-show-weight" style="width:auto;">
-          <label for="desc-tag-show-weight" style="margin:0;">Show weight on the catalogue</label>
-        </div>
-        <div class="field">
-          <label>Purity (e.g. 22K, 925)</label>
-          <input type="text" id="desc-tag-purity" autocomplete="off" placeholder="Leave blank to use the group's purity">
-        </div>
-        <div class="field">
-          <label>Remarks / description</label>
-          <textarea id="desc-tag-text" rows="3" style="width:100%; padding:10px 12px; border:1.5px solid #E6DCCB; border-radius:9px; font-size:14px; font-family:'Work Sans',sans-serif;"></textarea>
-        </div>
-        <div class="field">
-          <label>Size chart (customers can tap to view it)</label>
-          <select id="desc-tag-sizechart-select">
-            <option value="">No size chart linked</option>
-          </select>
-        </div>
-        <div class="field" style="display:flex; align-items:center; gap:8px; margin-top:14px;">
-          <input type="checkbox" id="desc-tag-scarcity-enabled" style="width:auto;">
-          <label for="desc-tag-scarcity-enabled" style="margin:0;">Show an "Only X Left" badge on the catalogue</label>
-        </div>
-        <div class="field" id="desc-tag-scarcity-field" style="display:none;">
-          <label>Number to show (your own call — not tied to actual stock count)</label>
-          <input type="number" id="desc-tag-scarcity-count" min="1" step="1" placeholder="e.g. 2">
-        </div>
-        <div class="field" style="display:flex; align-items:center; gap:8px; margin-top:14px;">
-          <input type="checkbox" id="desc-tag-hidden" style="width:auto;">
-          <label for="desc-tag-hidden" style="margin:0;">Hide this item from the catalogue completely</label>
-        </div>
-        <div class="field" id="desc-tag-hide-home-field" style="display:flex; align-items:center; gap:8px;">
-          <input type="checkbox" id="desc-tag-hide-home" style="width:auto;">
-          <label for="desc-tag-hide-home" style="margin:0;">Hide only from its home category (still shows in "All" and in any custom category)</label>
-        </div>
-        <button class="btn" id="desc-tag-save-btn">Save Tag-Specific</button>
-        <p class="link-status" id="desc-tag-save-status"></p>
-      </div>
-
-      <p class="section-label" style="margin-top:10px;">Tag-Specific Already Set</p>
-      <div class="home-banner-list" id="desc-tag-existing-list"></div>
     </div>
 
     <!-- SIZE CHARTS TAB (upload once, reuse across many items) -->
     <div class="tab-pane" id="tab-sizecharts">
-      <p class="note" style="margin-top:0;">Upload each size chart (bracelet, bangle, ring, etc.) once here. Then in the Description tab's Group Details, link the right chart to each item group — the same chart image gets reused across every item that needs it, instead of uploading it again and again.</p>
+      <p class="note" style="margin-top:0;">Upload each size chart (bracelet, bangle, ring, etc.) once here. Then link the right chart to a whole category in the Group Defaults tab, or to one exact item in Tag Manage — the same chart image gets reused across every item that needs it, instead of uploading it again and again.</p>
 
       <div class="home-banner-list" id="sizechart-list"></div>
 
@@ -813,14 +753,75 @@
       <div class="home-banner-list" id="reverify-list"></div>
     </div>
 
-    <!-- ALL ITEMS TAB (a full group-wise overview of every barcode and its linked tags) -->
-    <div class="tab-pane" id="tab-allitems">
-      <p class="note" style="margin-top:0;">Every photo group currently in the catalogue, grouped by name and collapsed by default — tap a group to expand it, or search to jump straight to a specific barcode or tag. Tap any item row to open it in Manage.</p>
+    <!-- TAG MANAGE TAB (browse every barcode/tag group-wise; tapping one opens its photos and tag-specific details together — replaces the old All Items + Manage + Tag-Specific) -->
+    <div class="tab-pane" id="tab-tagmanage">
+      <p class="note" style="margin-top:0;">Every photo group currently in the catalogue, grouped by name and collapsed by default — tap a group to expand it, or search to jump straight to a specific barcode or tag. Tap any item row to manage its photos and tag-specific details together.</p>
       <div class="field">
         <input type="text" id="allitems-search" autocomplete="off" placeholder="Search by barcode, tag, or item name…">
       </div>
       <p class="manage-status" id="allitems-status"></p>
       <div class="home-banner-list" id="allitems-list"></div>
+
+      <div id="tagmanage-box" style="display:none; margin-top:24px; padding-top:20px; border-top:1.5px solid #E6DCCB;">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <p class="section-label" id="tagmanage-heading" style="margin:0;"></p>
+          <button class="close-section-btn" id="tagmanage-close-btn" type="button" title="Close">✕</button>
+        </div>
+
+        <p class="section-label" style="margin-top:14px;">Photos</p>
+        <p class="manage-status" id="manage-status"></p>
+        <button class="btn secondary" id="manage-copy-link-btn" type="button" style="display:none; margin-bottom:16px;">🔗 Copy Shareable Link to This Item</button>
+        <div class="manage-grid" id="manage-grid"></div>
+        <p class="note">Deleting a photo here removes it permanently from Firebase Storage and the catalogue — it will disappear from the customer-facing catalogue page too. This cannot be undone.</p>
+
+        <p class="section-label" style="margin-top:26px;">Tag-Specific Details</p>
+        <p class="manage-status" id="desc-tag-status"></p>
+        <p class="tag-reference-line" id="desc-tag-reference"></p>
+
+        <div id="desc-tag-fields" style="display:none;">
+          <div class="field">
+            <label>Display name on catalogue</label>
+            <input type="text" id="desc-tag-name" autocomplete="off" placeholder="Leave blank to use the group's item name">
+          </div>
+          <div class="field" style="display:flex; align-items:center; gap:8px;">
+            <input type="checkbox" id="desc-tag-show-weight" style="width:auto;">
+            <label for="desc-tag-show-weight" style="margin:0;">Show weight on the catalogue</label>
+          </div>
+          <div class="field">
+            <label>Purity (e.g. 22K, 925)</label>
+            <input type="text" id="desc-tag-purity" autocomplete="off" placeholder="Leave blank to use the group's purity">
+          </div>
+          <div class="field">
+            <label>Remarks / description</label>
+            <textarea id="desc-tag-text" rows="3" style="width:100%; padding:10px 12px; border:1.5px solid #E6DCCB; border-radius:9px; font-size:14px; font-family:'Work Sans',sans-serif;"></textarea>
+          </div>
+          <div class="field">
+            <label>Size chart (customers can tap to view it)</label>
+            <select id="desc-tag-sizechart-select">
+              <option value="">No size chart linked</option>
+            </select>
+          </div>
+          <div class="field" style="display:flex; align-items:center; gap:8px; margin-top:14px;">
+            <input type="checkbox" id="desc-tag-scarcity-enabled" style="width:auto;">
+            <label for="desc-tag-scarcity-enabled" style="margin:0;">Show an "Only X Left" badge on the catalogue</label>
+          </div>
+          <div class="field" id="desc-tag-scarcity-field" style="display:none;">
+            <label>Number to show (your own call — not tied to actual stock count)</label>
+            <input type="number" id="desc-tag-scarcity-count" min="1" step="1" placeholder="e.g. 2">
+          </div>
+          <div class="field" style="display:flex; align-items:center; gap:8px; margin-top:14px;">
+            <input type="checkbox" id="desc-tag-hidden" style="width:auto;">
+            <label for="desc-tag-hidden" style="margin:0;">Hide this item from the catalogue completely</label>
+          </div>
+          <div class="field" id="desc-tag-hide-home-field" style="display:flex; align-items:center; gap:8px;">
+            <input type="checkbox" id="desc-tag-hide-home" style="width:auto;">
+            <label for="desc-tag-hide-home" style="margin:0;">Hide only from its home category (still shows in "All" and in any custom category)</label>
+          </div>
+          <button class="btn" id="desc-tag-save-btn">Save Tag-Specific</button>
+          <button class="btn secondary" id="desc-tag-clear-btn" type="button" style="margin-top:8px;">Clear Override (Back to Group Default)</button>
+          <p class="link-status" id="desc-tag-save-status"></p>
+        </div>
+      </div>
     </div>
 
     <!-- CUSTOM PRICE TAB (catalogue-only making-charge override, per exact tag) -->
@@ -879,18 +880,6 @@
 
       <p class="section-label" style="margin-top:10px;">Your Custom Categories</p>
       <div class="home-banner-list" id="customcat-list"></div>
-    </div>
-
-    <!-- MANAGE TAB (delete existing catalogue photos) -->
-    <div class="tab-pane" id="tab-manage">
-      <div class="manage-search">
-        <input type="text" id="manage-barcode-input" autocomplete="off" placeholder="Enter barcode to view its photos">
-        <button class="btn" id="manage-load-btn">Load</button>
-      </div>
-      <p class="manage-status" id="manage-status"></p>
-      <button class="btn secondary" id="manage-copy-link-btn" type="button" style="display:none; margin-bottom:16px;">🔗 Copy Shareable Link to This Item</button>
-      <div class="manage-grid" id="manage-grid"></div>
-      <p class="note">Deleting a photo here removes it permanently from Firebase Storage and the catalogue — it will disappear from the customer-facing catalogue page too. This cannot be undone.</p>
     </div>
 
   </div>
@@ -966,10 +955,9 @@ document.getElementById('tab-desc-btn').addEventListener('click', () => switchTa
 document.getElementById('tab-sizecharts-btn').addEventListener('click', () => switchTab('sizecharts'));
 document.getElementById('tab-aienhance-btn').addEventListener('click', () => switchTab('aienhance'));
 document.getElementById('tab-reverify-btn').addEventListener('click', () => switchTab('reverify'));
-document.getElementById('tab-allitems-btn').addEventListener('click', () => switchTab('allitems'));
+document.getElementById('tab-tagmanage-btn').addEventListener('click', () => switchTab('tagmanage'));
 document.getElementById('tab-customprice-btn').addEventListener('click', () => switchTab('customprice'));
 document.getElementById('tab-customcat-btn').addEventListener('click', () => switchTab('customcat'));
-document.getElementById('tab-manage-btn').addEventListener('click', () => switchTab('manage'));
 function switchTab(name){
   document.getElementById('tab-scan-btn').classList.toggle('active', name==='scan');
   document.getElementById('tab-bulk-btn').classList.toggle('active', name==='bulk');
@@ -980,10 +968,9 @@ function switchTab(name){
   document.getElementById('tab-sizecharts-btn').classList.toggle('active', name==='sizecharts');
   document.getElementById('tab-aienhance-btn').classList.toggle('active', name==='aienhance');
   document.getElementById('tab-reverify-btn').classList.toggle('active', name==='reverify');
-  document.getElementById('tab-allitems-btn').classList.toggle('active', name==='allitems');
+  document.getElementById('tab-tagmanage-btn').classList.toggle('active', name==='tagmanage');
   document.getElementById('tab-customprice-btn').classList.toggle('active', name==='customprice');
   document.getElementById('tab-customcat-btn').classList.toggle('active', name==='customcat');
-  document.getElementById('tab-manage-btn').classList.toggle('active', name==='manage');
   document.getElementById('tab-scan').classList.toggle('active', name==='scan');
   document.getElementById('tab-bulk').classList.toggle('active', name==='bulk');
   document.getElementById('tab-link').classList.toggle('active', name==='link');
@@ -993,17 +980,16 @@ function switchTab(name){
   document.getElementById('tab-sizecharts').classList.toggle('active', name==='sizecharts');
   document.getElementById('tab-aienhance').classList.toggle('active', name==='aienhance');
   document.getElementById('tab-reverify').classList.toggle('active', name==='reverify');
-  document.getElementById('tab-allitems').classList.toggle('active', name==='allitems');
+  document.getElementById('tab-tagmanage').classList.toggle('active', name==='tagmanage');
   document.getElementById('tab-customprice').classList.toggle('active', name==='customprice');
   document.getElementById('tab-customcat').classList.toggle('active', name==='customcat');
-  document.getElementById('tab-manage').classList.toggle('active', name==='manage');
   if (name === 'home') { loadHomeCategories(); loadHomeBanners(); loadMarqueeText(); loadTrendingList(); loadCatIconCategories(); loadExistingCatIcons(); loadReels(); loadReelCategories(); }
   if (name === 'reviews') loadGoogleReviewsForManagement();
-  if (name === 'desc') { loadTagOverridesList(); loadGroupOverridesList(); loadGroupDropdown(); }
+  if (name === 'desc') { loadGroupOverridesList(); loadGroupDropdown(); }
   if (name === 'link') loadExistingLinkedGroups();
   if (name === 'sizecharts') loadSizeCharts();
   if (name === 'reverify') loadReverificationQueue();
-  if (name === 'allitems') loadAllItemsOverview();
+  if (name === 'tagmanage') loadAllItemsOverview();
   if (name === 'customprice') loadCustomPriceOverridesList();
   if (name === 'customcat') loadCustomCategories();
   if (name === 'aienhance') { loadAiEnhancePrompt(); loadAiEnhanceBatchCategories(); }
@@ -1140,7 +1126,7 @@ async function uploadForBarcode(barcode, fullCanvas){
   // filename (never overwritten), so there's no risk of a customer's phone
   // caching a now-stale image under an old URL — a "new" photo always means
   // a brand new URL, an edited/replaced one always means deleting the old
-  // entry first (Manage tab) rather than overwriting it in place.
+  // entry first (Tag Manage tab) rather than overwriting it in place.
   const cacheOpts = { contentType: 'image/jpeg', cacheControl: 'public, max-age=31536000, immutable' };
   await Promise.all([
     uploadBytes(sRef, fullBlob, cacheOpts),
@@ -2476,7 +2462,7 @@ async function toggleReviewHidden(btn){
   btn.disabled = false;
 }
 
-// ---------- Description: two editable levels (Group Defaults -> Tag-Specific), on top of the raw POS stock baseline ----------
+// ---------- Group Defaults (category-wide) — Tag-Specific now lives further down, alongside photo management (see "Tag Manage" below) ----------
 
 // ===== Group Defaults (category-wide) =====
 async function loadGroupDropdown(){
@@ -2716,13 +2702,12 @@ async function deleteGroupOverride(key){
 
 // ===== Tag-Specific (merged: what used to be "Barcode Override" plus the
 // old per-tag scarcity/note fields — one barcode/tag, one form, one save) =====
-document.getElementById('desc-tag-load-btn').addEventListener('click', loadTagOverride);
+// No standalone "enter a barcode" box here anymore — this form is always
+// opened by openTagManageBox(), triggered by tapping a row in the grouped
+// list above (or the search results within it).
 document.getElementById('desc-tag-scarcity-enabled').addEventListener('change', () => {
   document.getElementById('desc-tag-scarcity-field').style.display =
     document.getElementById('desc-tag-scarcity-enabled').checked ? 'block' : 'none';
-});
-document.getElementById('desc-tag-barcode-input').addEventListener('keydown', e => {
-  if (e.key === 'Enter') { e.preventDefault(); loadTagOverride(); }
 });
 // Once fully hidden, "hide from home category only" is moot — grey it out
 // instead of leaving two switches that could look like they disagree.
@@ -2736,12 +2721,18 @@ document.getElementById('desc-tag-hidden').addEventListener('change', () => {
 let currentDescTag = null;
 let tagEditRequestToken = 0; // guards against a slow async load finishing after a newer one started
 
-document.getElementById('desc-tag-close-btn').addEventListener('click', () => {
+// Closes the whole combined box (photos + tag-specific details) at once —
+// there's only one close button for both now, not one each.
+document.getElementById('tagmanage-close-btn').addEventListener('click', () => {
   tagEditRequestToken++; // invalidate anything still in flight
+  document.getElementById('tagmanage-box').style.display = 'none';
+  document.getElementById('manage-status').textContent = '';
+  document.getElementById('manage-grid').innerHTML = '';
+  document.getElementById('manage-copy-link-btn').style.display = 'none';
   document.getElementById('desc-tag-fields').style.display = 'none';
-  document.getElementById('desc-tag-barcode-input').value = '';
   document.getElementById('desc-tag-status').textContent = '';
   document.getElementById('desc-tag-reference').textContent = '';
+  currentManageBarcode = null;
   currentDescTag = null;
 });
 
@@ -2770,32 +2761,31 @@ async function populateTagSizeChartDropdown(selectedId){
   }
 }
 
-async function loadTagOverride(){
-  const input = document.getElementById('desc-tag-barcode-input');
-  const tag = input.value.trim().toUpperCase();
+async function loadTagOverride(tag){
+  const barcode = (tag || currentDescTag || '').trim().toUpperCase();
   const statusEl = document.getElementById('desc-tag-status');
   const fieldsEl = document.getElementById('desc-tag-fields');
   const refEl = document.getElementById('desc-tag-reference');
   fieldsEl.style.display = 'none';
   refEl.textContent = '';
-  if (!tag) { statusEl.textContent = 'Enter a tag/barcode first.'; return; }
+  if (!barcode) { statusEl.textContent = 'Enter a tag/barcode first.'; return; }
 
   const myToken = ++tagEditRequestToken;
   statusEl.textContent = 'Loading…';
   try {
     const [itemSnap, descSnap, productSnap] = await Promise.all([
-      get(ref(db, 'catalogue/items/' + tag)),
-      get(ref(db, 'catalogue/tagDescriptions/' + tag)),
-      get(ref(db, 'jewelryData/products/' + tag)),
+      get(ref(db, 'catalogue/items/' + barcode)),
+      get(ref(db, 'catalogue/tagDescriptions/' + barcode)),
+      get(ref(db, 'jewelryData/products/' + barcode)),
     ]);
     if (myToken !== tagEditRequestToken) return; // a newer load started while this was in flight
 
     const node = itemSnap.val();
     if (!node) {
-      statusEl.textContent = 'No photos found for ' + tag + ' — upload photos for it first.';
+      statusEl.textContent = 'No photos found for ' + barcode + ' — upload photos for it first.';
       return;
     }
-    currentDescTag = tag;
+    currentDescTag = barcode;
 
     // Fetch the group default for this item's category BEFORE filling the
     // fields — every field below pre-fills with this tag's own override if
@@ -2885,74 +2875,26 @@ document.getElementById('desc-tag-save-btn').addEventListener('click', async () 
     });
     statusEl.textContent = 'Saved!';
     setTimeout(() => { statusEl.textContent = ''; }, 2000);
-    loadTagOverridesList();
+    // Refresh the grouped list behind this box too — a saved hidden/sold
+    // status or name change should be reflected there without needing to
+    // close and reopen. (Full refetch, not just a re-render, since the
+    // list's cache would otherwise still show the pre-save values.)
+    loadAllItemsOverview();
   } catch (e) {
     console.error(e);
     statusEl.textContent = 'Could not save — try again.';
   }
 });
 
-// Shows every barcode/tag that has its own override (name/weight/purity/
-// remarks/size chart on the item record, and/or a scarcity badge), so you
-// can jump back into editing one without having to remember/retype it.
-async function loadTagOverridesList(){
-  const listEl = document.getElementById('desc-tag-existing-list');
-  listEl.innerHTML = '<div class="home-banner-row"><span class="cat" style="color:var(--ink-soft); font-weight:400;">Loading…</span></div>';
-  try {
-    const [itemsSnap, descSnap] = await Promise.all([
-      get(ref(db, 'catalogue/items')),
-      get(ref(db, 'catalogue/tagDescriptions')),
-    ]);
-    const items = itemsSnap.val() || {};
-    const descs = descSnap.val() || {};
-    const keys = new Set([
-      ...Object.keys(items).filter(bc => items[bc] && (items[bc].purity || items[bc].groupRemarks || typeof items[bc].showWeight === 'boolean' || items[bc].sizeChartId || items[bc].nameOverride || items[bc].hidden || items[bc].hideFromHomeCategory)),
-      ...Object.keys(descs).filter(t => descs[t]),
-    ]);
-    if (!keys.size) {
-      listEl.innerHTML = '<div class="home-banner-row"><span class="cat" style="color:var(--ink-soft); font-weight:400;">No tag-specific entries set yet.</span></div>';
-      return;
-    }
-    listEl.innerHTML = Array.from(keys).sort().map(k => {
-      const n = items[k] || {};
-      const d = normalizeTagDesc(descs[k]);
-      const itemName = n.displayName || k;
-      const bits = [
-        n.hidden ? 'HIDDEN' : (n.hideFromHomeCategory ? 'hidden from home category' : null),
-        n.purity, n.showWeight ? 'weight shown' : null,
-        (d.scarcityEnabled && d.scarcityCount) ? `Only ${d.scarcityCount} Left` : null,
-      ].filter(Boolean).join(' · ');
-      return `
-        <div class="home-banner-row existing-row-clickable" data-tag="${k}">
-          <span class="cat" style="flex:1;">${k} <span style="color:var(--ink-soft); font-weight:400;">— ${itemName}</span></span>
-          <p class="review-row-text" style="max-width:150px;">${bits}</p>
-          <button class="manage-del-btn" data-tag="${k}" title="Remove this tag's override">🗑</button>
-        </div>`;
-    }).join('');
-    listEl.querySelectorAll('.existing-row-clickable').forEach(row => {
-      row.addEventListener('click', e => {
-        if (e.target.closest('.manage-del-btn')) return;
-        document.getElementById('desc-tag-barcode-input').value = row.dataset.tag;
-        loadTagOverride();
-      });
-    });
-    listEl.querySelectorAll('.manage-del-btn').forEach(btn => {
-      btn.addEventListener('click', e => {
-        e.stopPropagation();
-        deleteTagOverride(btn.dataset.tag);
-      });
-    });
-  } catch (e) {
-    console.error(e);
-    listEl.innerHTML = '';
-  }
-}
-
 // Note: this deliberately does NOT touch `hidden`/`hideFromHomeCategory` —
 // those are a separate moderation decision, not part of the name/weight/
 // purity override, so clearing the override here can't accidentally
 // un-hide something that was hidden on purpose. Toggle those off directly
-// (load the tag, uncheck, save) if that's actually what's wanted.
+// (uncheck them and save) if that's actually what's wanted.
+document.getElementById('desc-tag-clear-btn').addEventListener('click', () => {
+  if (currentDescTag) deleteTagOverride(currentDescTag);
+});
+
 async function deleteTagOverride(tag){
   if (!confirm(`Remove ${tag}'s tag-specific override? It'll go back to inheriting purely from its group's default (if one is set) or the plain stock name/no purity/etc.`)) return;
   try {
@@ -2966,10 +2908,8 @@ async function deleteTagOverride(tag){
       ['catalogue/items/' + tag + '/scarcityCount']: null,
       ['catalogue/tagDescriptions/' + tag]: null,
     });
-    if (currentDescTag === tag) {
-      document.getElementById('desc-tag-close-btn').click();
-    }
-    loadTagOverridesList();
+    if (currentDescTag === tag) loadTagOverride(tag); // refresh the open form to show the cleared/inherited state
+    loadAllItemsOverview(); // the grouped list may show this barcode's name — refresh it too
   } catch (e) {
     console.error(e);
     alert('Could not remove — try again.');
@@ -3522,7 +3462,7 @@ async function loadReverificationQueue(){
       btn.addEventListener('click', () => dismissVerification(btn.dataset.bc));
     });
     listEl.querySelectorAll('[data-action="manage"]').forEach(btn => {
-      btn.addEventListener('click', () => jumpToManage(btn.dataset.bc));
+      btn.addEventListener('click', () => openTagManageBox(btn.dataset.bc));
     });
   } catch (e) {
     console.error(e);
@@ -3540,10 +3480,17 @@ async function dismissVerification(bc){
   }
 }
 
-function jumpToManage(bc){
-  switchTab('manage');
-  document.getElementById('manage-barcode-input').value = bc;
-  loadManagePhotos();
+// Opens the combined box (photos + tag-specific details) for one barcode/tag
+// — the single entry point into what used to be three separate places
+// (All Items, Manage, and Tag-Specific, which used to live in what's now
+// the Group Defaults tab).
+function openTagManageBox(bc){
+  switchTab('tagmanage');
+  document.getElementById('tagmanage-box').style.display = 'block';
+  document.getElementById('tagmanage-heading').textContent = 'Managing: ' + bc;
+  loadManagePhotos(bc);
+  loadTagOverride(bc);
+  document.getElementById('tagmanage-box').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 // ---------- Custom Categories: manually curated collections, independent of item names ----------
@@ -3924,6 +3871,7 @@ async function loadAllItemsOverview(){
 function renderItemSubRow(bc, node, tags){
   const isSoldOut = !node.available;
   const availTag = isSoldOut ? ' <span style="color:#B5442E;">(sold out)</span>' : '';
+  const hiddenTag = node.hidden ? ' <span style="color:#B5442E;">(hidden)</span>' : '';
   const tagsText = tags.length > 1 ? tags.join(', ') : tags[0] + ' (unlinked)';
   // "Sold out" here only reflects this catalogue entry's own `available`
   // flag, which the POS updates after a sale/return/rate-change/import — a
@@ -3932,7 +3880,7 @@ function renderItemSubRow(bc, node, tags){
   const recheckBtn = isSoldOut ? `<button class="manage-del-btn recheck-avail-btn" data-bc="${bc}" title="Recheck stock and fix if it's actually in stock">↻</button>` : '';
   return `
     <div class="home-banner-row existing-row-clickable" data-bc="${bc}">
-      <span class="cat" style="flex:1; padding-left:16px;">${bc}${availTag} <span style="color:var(--ink-soft); font-weight:400;">${tagsText}</span></span>
+      <span class="cat" style="flex:1; padding-left:16px;">${bc}${availTag}${hiddenTag} <span style="color:var(--ink-soft); font-weight:400;">${tagsText}</span></span>
       ${recheckBtn}
     </div>`;
 }
@@ -3942,7 +3890,7 @@ function wireItemSubRowClicks(listEl){
     row.addEventListener('click', e => {
       if (e.target.closest('.recheck-avail-btn')) return; // let the recheck button handle its own click
       e.stopPropagation();
-      jumpToManage(row.dataset.bc);
+      openTagManageBox(row.dataset.bc);
     });
   });
   listEl.querySelectorAll('.recheck-avail-btn').forEach(btn => {
@@ -4056,14 +4004,11 @@ document.getElementById('allitems-search').addEventListener('input', renderAllIt
 // Flat entries may or may not have a storagePath — older ones uploaded outside
 // this tool sometimes don't, in which case we can only delete the DB record
 // and the Storage file has to be removed manually via the Firebase console.
-document.getElementById('manage-load-btn').addEventListener('click', loadManagePhotos);
-document.getElementById('manage-barcode-input').addEventListener('keydown', e => {
-  if (e.key === 'Enter') { e.preventDefault(); loadManagePhotos(); }
-});
+let currentManageBarcode = null; // tracks which barcode is loaded, so a bare refresh (no arg) after set-main/delete still knows what to reload
 
-async function loadManagePhotos(){
-  const input = document.getElementById('manage-barcode-input');
-  const barcode = input.value.trim().toUpperCase();
+async function loadManagePhotos(bc){
+  const barcode = (bc || currentManageBarcode || '').trim().toUpperCase();
+  currentManageBarcode = barcode || null;
   const statusEl = document.getElementById('manage-status');
   const grid = document.getElementById('manage-grid');
   const copyLinkBtn = document.getElementById('manage-copy-link-btn');
