@@ -2480,8 +2480,6 @@ async function loadGroupDetails(){
     document.getElementById('desc-show-weight').checked = !!node.showWeight;
     document.getElementById('desc-purity').value = node.purity || '';
     document.getElementById('desc-group-remarks').value = node.groupRemarks || '';
-    document.getElementById('desc-scarcity-enabled').checked = !!node.scarcityEnabled;
-    document.getElementById('desc-scarcity-count').value = node.scarcityCount || '';
     await populateSizeChartDropdown(node.sizeChartId || '');
     if (myToken !== groupDetailsRequestToken) return;
     document.getElementById('desc-group-mode-label').textContent = `Editing barcode: ${barcode} (its own override — separate from any category default)`;
@@ -2591,8 +2589,6 @@ document.getElementById('desc-group-category-filter').addEventListener('change',
     document.getElementById('desc-show-weight').checked = !!cat.showWeight;
     document.getElementById('desc-purity').value = cat.purity || '';
     document.getElementById('desc-group-remarks').value = cat.groupRemarks || '';
-    document.getElementById('desc-scarcity-enabled').checked = !!cat.scarcityEnabled;
-    document.getElementById('desc-scarcity-count').value = cat.scarcityCount || '';
     await populateSizeChartDropdown(cat.sizeChartId || '');
     if (myToken !== groupDetailsRequestToken) return; // check again — populateSizeChartDropdown is also async
 
@@ -2617,9 +2613,6 @@ document.getElementById('desc-group-save-btn').addEventListener('click', async (
   const purity = document.getElementById('desc-purity').value.trim();
   const groupRemarks = document.getElementById('desc-group-remarks').value.trim();
   const sizeChartId = document.getElementById('desc-sizechart-select').value;
-  const scarcityEnabled = document.getElementById('desc-scarcity-enabled').checked;
-  const scarcityCountRaw = document.getElementById('desc-scarcity-count').value;
-  const scarcityCount = scarcityCountRaw ? Math.max(1, parseInt(scarcityCountRaw, 10)) : null;
 
   statusEl.textContent = 'Saving…';
   try {
@@ -2629,8 +2622,6 @@ document.getElementById('desc-group-save-btn').addEventListener('click', async (
       ['catalogue/items/' + currentDescGroupBarcode + '/purity']: purity || null,
       ['catalogue/items/' + currentDescGroupBarcode + '/groupRemarks']: groupRemarks || null,
       ['catalogue/items/' + currentDescGroupBarcode + '/sizeChartId']: sizeChartId || null,
-      ['catalogue/items/' + currentDescGroupBarcode + '/scarcityEnabled']: scarcityEnabled,
-      ['catalogue/items/' + currentDescGroupBarcode + '/scarcityCount']: scarcityCount,
     });
     statusEl.textContent = 'Saved!';
     setTimeout(() => { statusEl.textContent = ''; }, 2000);
@@ -2656,9 +2647,6 @@ document.getElementById('desc-group-bulk-apply-btn').addEventListener('click', a
   const purity = document.getElementById('desc-purity').value.trim();
   const groupRemarks = document.getElementById('desc-group-remarks').value.trim();
   const sizeChartId = document.getElementById('desc-sizechart-select').value;
-  const scarcityEnabled = document.getElementById('desc-scarcity-enabled').checked;
-  const scarcityCountRaw = document.getElementById('desc-scarcity-count').value;
-  const scarcityCount = scarcityCountRaw ? Math.max(1, parseInt(scarcityCountRaw, 10)) : null;
   const label = homeCategoryLabel(currentCategoryFilterKey);
 
   if (!confirm(`Set this as the default for every item in "${label}" (currently ${currentCategoryFilterCount} item(s), and any added later)? Items with their own specific override will keep using their own value instead. Proceed?`)) return;
@@ -2666,7 +2654,7 @@ document.getElementById('desc-group-bulk-apply-btn').addEventListener('click', a
   statusEl.textContent = 'Saving category default…';
   try {
     await update(ref(db, '/'), {
-      ['catalogue/categorySettings/' + currentCategoryFilterKey]: { nameOverride, categoryLabel, showWeight, purity, groupRemarks, sizeChartId, scarcityEnabled, scarcityCount }
+      ['catalogue/categorySettings/' + currentCategoryFilterKey]: { nameOverride, categoryLabel, showWeight, purity, groupRemarks, sizeChartId }
     });
     statusEl.textContent = `Saved as the default for "${label}"!`;
     setTimeout(() => { statusEl.textContent = ''; }, 3000);
