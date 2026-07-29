@@ -1128,6 +1128,14 @@ async function uploadForBarcode(barcode, fullCanvas){
     thumbUrl, thumbStoragePath,
     uploadedAt: Date.now(),
   };
+  // The POS's own availability sync only updates barcodes that already have
+  // a catalogue entry, and only runs after a sale/return/rate-change/import
+  // — so a brand-new entry (this upload may be creating one right now)
+  // would otherwise sit shown as "sold out" until the next one of those
+  // happens anywhere in the shop. checkBarcodeInStock already confirmed
+  // this barcode is in stock immediately before capture, so it's safe to
+  // mark it available right here instead of waiting on that next event.
+  updates['catalogue/items/' + barcode + '/available'] = true;
   await update(ref(db, '/'), updates);
   return { imageId, storagePath, thumbStoragePath };
 }
@@ -3764,21 +3772,54 @@ async function loadAllItemsOverview(){
 // re-download a photo just to browse structure, and at real catalogue
 // volume that adds up in Storage bandwidth for something purely informational.
 function renderItemSubRow(bc, node, tags){
-  const availTag = node.available ? '' : ' <span style="color:#B5442E;">(sold out)</span>';
+  const isSoldOut = !node.available;
+  const availTag = isSoldOut ? ' <span style="color:#B5442E;">(sold out)</span>' : '';
   const tagsText = tags.length > 1 ? tags.join(', ') : tags[0] + ' (unlinked)';
+  // "Sold out" here only reflects this catalogue entry's own `available`
+  // flag, which the POS updates after a sale/return/rate-change/import — a
+  // freshly-uploaded item can show this before the POS has had a reason to
+  // sync yet, so a quick recheck button is offered right on the row.
+  const recheckBtn = isSoldOut ? `<button class="manage-del-btn recheck-avail-btn" data-bc="${bc}" title="Recheck stock and fix if it's actually in stock">↻</button>` : '';
   return `
     <div class="home-banner-row existing-row-clickable" data-bc="${bc}">
       <span class="cat" style="flex:1; padding-left:16px;">${bc}${availTag} <span style="color:var(--ink-soft); font-weight:400;">${tagsText}</span></span>
+      ${recheckBtn}
     </div>`;
 }
 
 function wireItemSubRowClicks(listEl){
   listEl.querySelectorAll('[data-bc]').forEach(row => {
     row.addEventListener('click', e => {
+      if (e.target.closest('.recheck-avail-btn')) return; // let the recheck button handle its own click
       e.stopPropagation();
       jumpToManage(row.dataset.bc);
     });
   });
+  listEl.querySelectorAll('.recheck-avail-btn').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      recheckAvailability(btn.dataset.bc, btn);
+    });
+  });
+}
+
+// Re-runs the same in-stock check the upload flow uses, and corrects this
+// one barcode's `available` flag directly — a manual escape hatch for the
+// gap where a brand-new catalogue entry sits marked unavailable until some
+// unrelated POS event (sale/return/rate-change/import) happens to sync it.
+async function recheckAvailability(bc, btn){
+  if (btn) { btn.disabled = true; btn.textContent = '…'; }
+  try {
+    const result = await checkBarcodeInStock(bc);
+    await update(ref(db, '/'), { ['catalogue/items/' + bc + '/available']: result.ok });
+    if (allItemsCache.items[bc]) allItemsCache.items[bc].available = result.ok;
+    if (!result.ok) alert(bc + ': ' + result.reason);
+    renderAllItemsList();
+  } catch (e) {
+    console.error(e);
+    alert('Could not recheck — try again.');
+    if (btn) { btn.disabled = false; btn.textContent = '↻'; }
+  }
 }
 
 function renderAllItemsList(){
