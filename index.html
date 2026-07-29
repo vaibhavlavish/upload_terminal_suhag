@@ -562,131 +562,107 @@
       <div class="home-banner-list" id="reviews-mgmt-list"></div>
     </div>
 
-    <!-- DESCRIPTION TAB (group details + per-tag notes, shown on the catalogue above price) -->
+    <!-- DESCRIPTION TAB (two editable levels, broadest to narrowest: Group Defaults -> Tag-Specific — the raw POS stock record is the baseline underneath both, shown on the catalogue above price) -->
     <div class="tab-pane" id="tab-desc">
-      <p class="note" style="margin-top:0;">Group details apply to the whole photo/group (a barcode with photos, or a linked set). Tag-specific notes apply to one exact tag only — useful when a linked group's pieces differ slightly.</p>
+      <p class="note" style="margin-top:0;">These stack three levels deep, broadest to narrowest — each one overrides whatever came before it, field by field, only where it sets its own value: <b>POS</b> (the raw stock record — name, weight, purity as entered in your POS; the baseline when nothing below sets anything) → <b>Group</b> (every item in a category) → <b>Tag-Specific</b> (one exact barcode/tag — the narrowest, and the one that wins). Leave a field blank to keep inheriting from the level above.</p>
 
-      <p class="section-label">Tag-Specific Description</p>
-      <div class="link-search">
-        <input type="text" id="desc-tag-barcode-input" autocomplete="off" placeholder="Enter the exact tag (e.g. GCH2)">
-        <button class="btn" id="desc-tag-load-btn">Load</button>
-      </div>
-      <p class="manage-status" id="desc-tag-status"></p>
-
-      <div id="desc-tag-fields" style="display:none;">
-        <div style="display:flex; justify-content:flex-end;">
-          <button class="close-section-btn" id="desc-tag-close-btn" type="button" title="Close">✕</button>
-        </div>
-        <p class="tag-reference-line" id="desc-tag-reference"></p>
-        <div class="field">
-          <label>Custom item name for this tag (overrides the group's name, e.g. "Silver Heart Pendant" instead of "Silver Pendant")</label>
-          <input type="text" id="desc-tag-name" autocomplete="off" placeholder="Leave blank to use the group's item name">
-        </div>
-        <div class="field" style="display:flex; align-items:center; gap:8px;">
-          <input type="checkbox" id="desc-tag-show-weight" style="width:auto;">
-          <label for="desc-tag-show-weight" style="margin:0;">Show this tag's weight on the catalogue</label>
-        </div>
-        <div class="field">
-          <label>Purity for this tag (overrides the group's, e.g. 22K, 925)</label>
-          <input type="text" id="desc-tag-purity" autocomplete="off" placeholder="Leave blank to use the group's purity">
-        </div>
-        <div class="field">
-          <label>Description for this tag</label>
-          <textarea id="desc-tag-text" rows="3" style="width:100%; padding:10px 12px; border:1.5px solid #E6DCCB; border-radius:9px; font-size:14px; font-family:'Work Sans',sans-serif;"></textarea>
-        </div>
-        <div class="field" style="display:flex; align-items:center; gap:8px; margin-top:14px;">
-          <input type="checkbox" id="desc-tag-scarcity-enabled" style="width:auto;">
-          <label for="desc-tag-scarcity-enabled" style="margin:0;">Show an "Only X Left" badge on the catalogue for this tag</label>
-        </div>
-        <div class="field" id="desc-tag-scarcity-field" style="display:none;">
-          <label>Number to show (your own call — not tied to actual stock count)</label>
-          <input type="number" id="desc-tag-scarcity-count" min="1" step="1" placeholder="e.g. 2">
-        </div>
-        <button class="btn" id="desc-tag-save-btn">Save Tag Description</button>
-        <p class="link-status" id="desc-tag-save-status"></p>
-      </div>
-
-      <p class="section-label" style="margin-top:10px;">Already Written</p>
-      <div class="home-banner-list" id="desc-tag-existing-list"></div>
-
-      <p class="section-label" style="margin-top:26px;">Group Details</p>
-
+      <p class="section-label">Group Defaults</p>
+      <p class="note" style="margin-top:0;">Applies to every item in a category automatically, including ones added later — unless a Tag-Specific entry below sets its own value instead.</p>
       <div class="field">
-        <label>Category default (optional — set once, every item in this category inherits it automatically, including ones added later)</label>
+        <label>Select a category</label>
         <select id="desc-group-category-filter">
           <option value="">— Select a category —</option>
         </select>
       </div>
+      <p class="manage-status" id="desc-grp-status"></p>
 
-      <div class="link-search">
-        <input type="text" id="desc-group-barcode-input" autocomplete="off" placeholder="Or enter the barcode directly">
-        <button class="btn" id="desc-group-load-btn">Load</button>
-      </div>
-      <p class="manage-status" id="desc-group-status"></p>
-
-      <div id="desc-group-fields" style="display:none;">
+      <div id="desc-grp-fields" style="display:none;">
         <div style="display:flex; justify-content:space-between; align-items:center;">
-          <p class="section-label" id="desc-group-mode-label" style="margin:0;"></p>
-          <button class="close-section-btn" id="desc-group-close-btn" type="button" title="Close">✕</button>
+          <p class="section-label" id="desc-grp-mode-label" style="margin:0;"></p>
         </div>
         <div class="field">
           <label>Display name on catalogue</label>
-          <input type="text" id="desc-group-name-override" autocomplete="off" placeholder="Currently: (loading…)">
+          <input type="text" id="desc-grp-name-override" autocomplete="off" placeholder="Leave blank to keep each item's own auto name">
         </div>
-        <div class="field" id="desc-category-label-field" style="display:none;">
+        <div class="field">
           <label>Category chip label on catalogue</label>
           <input type="text" id="desc-category-label" autocomplete="off" placeholder="Leave blank to show the category name as-is">
           <p class="note" style="margin-top:4px;">Only renames the chip text customers see — items still group under this category exactly the same either way.</p>
         </div>
         <div class="field" style="display:flex; align-items:center; gap:8px;">
-          <input type="checkbox" id="desc-show-weight" style="width:auto;">
-          <label for="desc-show-weight" style="margin:0;">Show item weight on the catalogue</label>
+          <input type="checkbox" id="desc-grp-show-weight" style="width:auto;">
+          <label for="desc-grp-show-weight" style="margin:0;">Show item weight on the catalogue</label>
         </div>
         <div class="field">
           <label>Purity (e.g. 22K, 925)</label>
-          <input type="text" id="desc-purity" autocomplete="off" placeholder="e.g. 22K">
+          <input type="text" id="desc-grp-purity" autocomplete="off" placeholder="e.g. 22K">
         </div>
         <div class="field">
-          <label>Remarks (shown for the whole group)</label>
-          <textarea id="desc-group-remarks" rows="3" style="width:100%; padding:10px 12px; border:1.5px solid #E6DCCB; border-radius:9px; font-size:14px; font-family:'Work Sans',sans-serif;"></textarea>
+          <label>Remarks (shown for every item in this category)</label>
+          <textarea id="desc-grp-remarks" rows="3" style="width:100%; padding:10px 12px; border:1.5px solid #E6DCCB; border-radius:9px; font-size:14px; font-family:'Work Sans',sans-serif;"></textarea>
         </div>
         <div class="field">
           <label>Size chart (customers can tap to view it)</label>
-          <select id="desc-sizechart-select">
+          <select id="desc-grp-sizechart-select">
             <option value="">No size chart linked</option>
           </select>
         </div>
-        <p class="note" style="margin-top:10px;">⭐ <b>Scarcity badges are now tag-specific</b> — set them in the "Tag-Specific Description" section above, so each tag can show its own "Only X Left" count (or none at all).</p>
-        <button class="btn" id="desc-group-save-btn">Save Group Details (This Group Only)</button>
-        <button class="btn secondary" id="desc-group-bulk-apply-btn" type="button" style="display:none; margin-top:8px;">Apply to All in Category</button>
-        <p class="link-status" id="desc-group-save-status"></p>
+        <button class="btn" id="desc-grp-save-btn">Save Group Defaults</button>
+        <p class="link-status" id="desc-grp-save-status"></p>
       </div>
 
-      <p class="section-label" style="margin-top:22px;">Edit Category Defaults</p>
-      <p class="note" style="margin-top:0; margin-bottom:12px;">Set or update the display label for an entire category — this will appear as the chip text on the catalogue for all items in this category.</p>
-      
-      <div class="field">
-        <label>Select a category</label>
-        <select id="desc-category-select">
-          <option value="">— Select a category —</option>
-        </select>
-      </div>
-      
-      <div id="desc-category-edit-fields" style="display:none;">
-        <div class="field">
-          <label>Category chip label on catalogue</label>
-          <input type="text" id="desc-category-chip-label" autocomplete="off" placeholder="Leave blank to show the category name as-is">
-          <p class="note" style="margin-top:4px;">Only renames the chip text customers see — items still group under this category exactly the same either way.</p>
-        </div>
-        <button class="btn" id="desc-category-save-btn">Save Category Defaults</button>
-        <p class="link-status" id="desc-category-save-status"></p>
-      </div>
-
-      <p class="section-label" style="margin-top:10px;">Category Defaults Already Set</p>
+      <p class="section-label" style="margin-top:22px;">Group Defaults Already Set</p>
       <div class="home-banner-list" id="desc-category-defaults-list"></div>
 
-      <p class="section-label" style="margin-top:22px;">Individual Item Overrides Already Set</p>
-      <div class="home-banner-list" id="desc-group-existing-list"></div>
+      <p class="section-label" style="margin-top:30px;">Tag-Specific</p>
+      <p class="note" style="margin-top:0;">Overrides the Group default above for one exact barcode/tag — the narrowest level, and the one that wins.</p>
+      <div class="link-search">
+        <input type="text" id="desc-tag-barcode-input" autocomplete="off" placeholder="Enter the tag / barcode (e.g. SBA208)">
+        <button class="btn" id="desc-tag-load-btn">Load</button>
+      </div>
+      <p class="manage-status" id="desc-tag-status"></p>
+      <p class="tag-reference-line" id="desc-tag-reference"></p>
+
+      <div id="desc-tag-fields" style="display:none;">
+        <div style="display:flex; justify-content:flex-end;">
+          <button class="close-section-btn" id="desc-tag-close-btn" type="button" title="Close">✕</button>
+        </div>
+        <div class="field">
+          <label>Display name on catalogue</label>
+          <input type="text" id="desc-tag-name" autocomplete="off" placeholder="Leave blank to use the group's item name">
+        </div>
+        <div class="field" style="display:flex; align-items:center; gap:8px;">
+          <input type="checkbox" id="desc-tag-show-weight" style="width:auto;">
+          <label for="desc-tag-show-weight" style="margin:0;">Show weight on the catalogue</label>
+        </div>
+        <div class="field">
+          <label>Purity (e.g. 22K, 925)</label>
+          <input type="text" id="desc-tag-purity" autocomplete="off" placeholder="Leave blank to use the group's purity">
+        </div>
+        <div class="field">
+          <label>Remarks / description</label>
+          <textarea id="desc-tag-text" rows="3" style="width:100%; padding:10px 12px; border:1.5px solid #E6DCCB; border-radius:9px; font-size:14px; font-family:'Work Sans',sans-serif;"></textarea>
+        </div>
+        <div class="field">
+          <label>Size chart (customers can tap to view it)</label>
+          <select id="desc-tag-sizechart-select">
+            <option value="">No size chart linked</option>
+          </select>
+        </div>
+        <div class="field" style="display:flex; align-items:center; gap:8px; margin-top:14px;">
+          <input type="checkbox" id="desc-tag-scarcity-enabled" style="width:auto;">
+          <label for="desc-tag-scarcity-enabled" style="margin:0;">Show an "Only X Left" badge on the catalogue</label>
+        </div>
+        <div class="field" id="desc-tag-scarcity-field" style="display:none;">
+          <label>Number to show (your own call — not tied to actual stock count)</label>
+          <input type="number" id="desc-tag-scarcity-count" min="1" step="1" placeholder="e.g. 2">
+        </div>
+        <button class="btn" id="desc-tag-save-btn">Save Tag-Specific</button>
+        <p class="link-status" id="desc-tag-save-status"></p>
+      </div>
+
+      <p class="section-label" style="margin-top:10px;">Tag-Specific Already Set</p>
+      <div class="home-banner-list" id="desc-tag-existing-list"></div>
     </div>
 
     <!-- SIZE CHARTS TAB (upload once, reuse across many items) -->
@@ -997,7 +973,7 @@ function switchTab(name){
   document.getElementById('tab-manage').classList.toggle('active', name==='manage');
   if (name === 'home') { loadHomeCategories(); loadHomeBanners(); loadMarqueeText(); loadTrendingList(); loadCatIconCategories(); loadExistingCatIcons(); loadReels(); loadReelCategories(); }
   if (name === 'reviews') loadGoogleReviewsForManagement();
-  if (name === 'desc') { loadExistingTagDescriptions(); loadExistingGroupDetails(); loadExistingCategoryDefaults(); loadGroupCategoryFilter(); loadCategoryDefaultsDropdown(); }
+  if (name === 'desc') { loadTagOverridesList(); loadGroupOverridesList(); loadGroupDropdown(); }
   if (name === 'link') loadExistingLinkedGroups();
   if (name === 'sizecharts') loadSizeCharts();
   if (name === 'reverify') loadReverificationQueue();
@@ -2422,101 +2398,10 @@ async function toggleReviewHidden(btn){
   btn.disabled = false;
 }
 
-// ---------- Description: group details + per-tag notes ----------
-document.getElementById('desc-group-load-btn').addEventListener('click', loadGroupDetails);
-document.getElementById('desc-group-barcode-input').addEventListener('keydown', e => {
-  if (e.key === 'Enter') { e.preventDefault(); loadGroupDetails(); }
-});
+// ---------- Description: two editable levels (Group Defaults -> Tag-Specific), on top of the raw POS stock baseline ----------
 
-let currentDescGroupBarcode = null;
-
-document.getElementById('desc-group-close-btn').addEventListener('click', () => {
-  groupDetailsRequestToken++; // invalidate anything still in flight
-  document.getElementById('desc-group-fields').style.display = 'none';
-  document.getElementById('desc-group-barcode-input').value = '';
-  document.getElementById('desc-group-status').textContent = '';
-  document.getElementById('desc-group-category-filter').value = '';
-  document.getElementById('desc-group-bulk-apply-btn').style.display = 'none';
-  document.getElementById('desc-group-save-btn').style.display = 'block';
-  document.getElementById('desc-group-mode-label').textContent = '';
-  currentDescGroupBarcode = null;
-  currentCategoryFilterKey = '';
-  currentCategoryFilterCount = 0;
-});
-
-async function loadGroupDetails(){
-  const input = document.getElementById('desc-group-barcode-input');
-  const barcode = input.value.trim().toUpperCase();
-  const statusEl = document.getElementById('desc-group-status');
-  const fieldsEl = document.getElementById('desc-group-fields');
-  fieldsEl.style.display = 'none';
-  if (!barcode) { statusEl.textContent = 'Enter a barcode first.'; return; }
-
-  const myToken = ++groupDetailsRequestToken;
-  // Loading a specific barcode always wins over whatever category was
-  // selected — clear that selection so the two modes can't visually mix.
-  currentCategoryFilterKey = '';
-  document.getElementById('desc-group-category-filter').value = '';
-  document.getElementById('desc-group-bulk-apply-btn').style.display = 'none';
-
-  statusEl.textContent = 'Loading…';
-  try {
-    const snap = await get(ref(db, 'catalogue/items/' + barcode));
-    if (myToken !== groupDetailsRequestToken) return; // a newer load started while this was in flight
-    const node = snap.val();
-    if (!node) {
-      statusEl.textContent = 'No photos found for ' + barcode + ' — upload photos for it first.';
-      return;
-    }
-    currentDescGroupBarcode = barcode;
-    // Left blank unless an override already exists — the placeholder shows
-    // what's currently auto-computed from stock, so leaving it blank keeps
-    // following that automatically (e.g. if you correct a typo in the POS
-    // item name later, this stays in sync). Only typing something here
-    // freezes it as a deliberate override.
-    document.getElementById('desc-group-name-override').value = node.nameOverride || '';
-    document.getElementById('desc-group-name-override').placeholder = 'Currently: ' + (node.displayName || 'no name set yet');
-    document.getElementById('desc-category-label-field').style.display = 'none';
-    document.getElementById('desc-show-weight').checked = !!node.showWeight;
-    document.getElementById('desc-purity').value = node.purity || '';
-    document.getElementById('desc-group-remarks').value = node.groupRemarks || '';
-    await populateSizeChartDropdown(node.sizeChartId || '');
-    if (myToken !== groupDetailsRequestToken) return;
-    document.getElementById('desc-group-mode-label').textContent = `Editing barcode: ${barcode} (its own override — separate from any category default)`;
-    document.getElementById('desc-group-bulk-apply-btn').style.display = 'none';
-    document.getElementById('desc-group-save-btn').style.display = 'block';
-    statusEl.textContent = '';
-    fieldsEl.style.display = 'block';
-  } catch (e) {
-    if (myToken !== groupDetailsRequestToken) return;
-    console.error(e);
-    statusEl.textContent = 'Could not load — try again.';
-  }
-}
-
-// Fills the size-chart dropdown from whatever's in the chart library, and
-// selects whichever one (if any) is currently linked to this group.
-async function populateSizeChartDropdown(selectedId){
-  const select = document.getElementById('desc-sizechart-select');
-  try {
-    const snap = await get(ref(db, 'catalogue/sizeCharts'));
-    const val = snap.val() || {};
-    const charts = Object.keys(val).map(id => ({ id, name: val[id].name || id }));
-    charts.sort((a, b) => a.name.localeCompare(b.name));
-    select.innerHTML = '<option value="">No size chart linked</option>' +
-      charts.map(c => `<option value="${c.id}">${c.name.replace(/</g,'&lt;')}</option>`).join('');
-    select.value = selectedId || '';
-  } catch (e) {
-    console.error(e);
-  }
-}
-
-// ---------- Category-assisted picker for Group Details ----------
-// One stock name doesn't always mean one photo group — different barcodes
-// under the same name can have separate, never-linked photos. So this
-// filters to a shortlist of ACTUAL catalogue groups matching the category,
-// rather than assuming the category itself is the group.
-async function loadGroupCategoryFilter(){
+// ===== Group Defaults (category-wide) =====
+async function loadGroupDropdown(){
   const select = document.getElementById('desc-group-category-filter');
   const previousValue = select.value;
   try {
@@ -2535,417 +2420,125 @@ async function loadGroupCategoryFilter(){
   }
 }
 
-let currentCategoryFilterKey = '';
-let currentCategoryFilterCount = 0;
-let groupDetailsRequestToken = 0; // guards against a slow async load finishing after a newer one started
+let currentGroupEditKey = '';
+let currentGroupEditCount = 0;
+let groupEditRequestToken = 0; // guards against a slow async load finishing after a newer one started
 
 document.getElementById('desc-group-category-filter').addEventListener('change', async () => {
   const key = document.getElementById('desc-group-category-filter').value;
-  const bulkBtn = document.getElementById('desc-group-bulk-apply-btn');
-  const modeLabel = document.getElementById('desc-group-mode-label');
-  currentCategoryFilterKey = key;
+  const fieldsEl = document.getElementById('desc-grp-fields');
+  const statusEl = document.getElementById('desc-grp-status');
+  currentGroupEditKey = key;
 
-  const myToken = ++groupDetailsRequestToken;
+  const myToken = ++groupEditRequestToken;
 
   if (!key) {
-    bulkBtn.style.display = 'none';
-    document.getElementById('desc-group-fields').style.display = 'none';
+    fieldsEl.style.display = 'none';
+    statusEl.textContent = '';
     return;
   }
 
-  document.getElementById('desc-group-status').textContent = 'Loading category…';
+  statusEl.textContent = 'Loading category…';
   try {
     // Just a count, not a full listing — with hundreds of items in a
     // category, rendering every single barcode here would make this
-    // unusable. Setting or editing the category default doesn't need to
-    // know which specific barcodes are in it; if you need to set an
-    // exception for one specific item, type its barcode directly below (or
-    // find it in "Individual Item Overrides Already Set" if it already has one).
-    const [itemsSnap, categorySnap] = await Promise.all([
+    // unusable. If you need to set an exception for one specific item, use
+    // Tag-Specific below (or find it in "Tag-Specific Already Set" if it
+    // already has one).
+    const [itemsSnap, groupSnap] = await Promise.all([
       get(ref(db, 'catalogue/items')),
       get(ref(db, 'catalogue/categorySettings/' + key)),
     ]);
-
-    // Something newer (a barcode load, or picking a different category)
-    // started after this one — let that own the screen instead.
-    if (myToken !== groupDetailsRequestToken) return;
+    if (myToken !== groupEditRequestToken) return;
 
     const items = itemsSnap.val() || {};
     const matches = Object.keys(items).filter(bc => items[bc] && homeCategoryKey(items[bc].displayName) === key);
-    currentCategoryFilterCount = matches.length;
+    currentGroupEditCount = matches.length;
 
-    // This loads the CATEGORY's own persistent default — not any specific
-    // item's values, and not a blank form. Saving here sets the default
-    // every item in this category inherits automatically (including ones
-    // added later) unless that item has its own override saved separately
-    // below. Type a specific barcode below to set an exception for just
-    // that one instead.
-    currentDescGroupBarcode = null;
-    const cat = categorySnap.val() || {};
-    document.getElementById('desc-group-name-override').value = cat.nameOverride || '';
-    document.getElementById('desc-group-name-override').placeholder = 'Leave blank to keep each item\'s own auto name';
-    document.getElementById('desc-category-label-field').style.display = 'block';
-    document.getElementById('desc-category-label').value = cat.categoryLabel || '';
-    document.getElementById('desc-show-weight').checked = !!cat.showWeight;
-    document.getElementById('desc-purity').value = cat.purity || '';
-    document.getElementById('desc-group-remarks').value = cat.groupRemarks || '';
-    await populateSizeChartDropdown(cat.sizeChartId || '');
-    if (myToken !== groupDetailsRequestToken) return; // check again — populateSizeChartDropdown is also async
+    const grp = groupSnap.val() || {};
+    document.getElementById('desc-grp-name-override').value = grp.nameOverride || '';
+    document.getElementById('desc-category-label').value = grp.categoryLabel || '';
+    document.getElementById('desc-grp-show-weight').checked = !!grp.showWeight;
+    document.getElementById('desc-grp-purity').value = grp.purity || '';
+    document.getElementById('desc-grp-remarks').value = grp.groupRemarks || '';
+    await populateGroupSizeChartDropdown(grp.sizeChartId || '');
+    if (myToken !== groupEditRequestToken) return; // check again — populateGroupSizeChartDropdown is also async
 
-    document.getElementById('desc-group-status').textContent = `${matches.length} item${matches.length === 1 ? '' : 's'} currently in "${homeCategoryLabel(key)}".`;
-    document.getElementById('desc-group-fields').style.display = 'block';
-    modeLabel.textContent = `Editing default for category: ${homeCategoryLabel(key)}`;
-    document.getElementById('desc-group-save-btn').style.display = 'none';
-    bulkBtn.style.display = 'block';
-    bulkBtn.textContent = `Save as Default for "${homeCategoryLabel(key)}" (${matches.length} item${matches.length === 1 ? '' : 's'} now)`;
+    statusEl.textContent = `${matches.length} item${matches.length === 1 ? '' : 's'} currently in "${homeCategoryLabel(key)}".`;
+    document.getElementById('desc-grp-mode-label').textContent = `Editing default for category: ${homeCategoryLabel(key)}`;
+    document.getElementById('desc-grp-save-btn').textContent = `Save Default for "${homeCategoryLabel(key)}" (${matches.length} item${matches.length === 1 ? '' : 's'} now)`;
+    fieldsEl.style.display = 'block';
   } catch (e) {
-    if (myToken !== groupDetailsRequestToken) return;
+    if (myToken !== groupEditRequestToken) return;
     console.error(e);
-    document.getElementById('desc-group-status').textContent = 'Could not load category — try again.';
+    statusEl.textContent = 'Could not load category — try again.';
   }
 });
 
-document.getElementById('desc-group-save-btn').addEventListener('click', async () => {
-  if (!currentDescGroupBarcode) return;
-  const statusEl = document.getElementById('desc-group-save-status');
-  const nameOverride = document.getElementById('desc-group-name-override').value.trim();
-  const showWeight = document.getElementById('desc-show-weight').checked;
-  const purity = document.getElementById('desc-purity').value.trim();
-  const groupRemarks = document.getElementById('desc-group-remarks').value.trim();
-  const sizeChartId = document.getElementById('desc-sizechart-select').value;
-
-  statusEl.textContent = 'Saving…';
+async function populateGroupSizeChartDropdown(selectedId){
+  const select = document.getElementById('desc-grp-sizechart-select');
   try {
-    await update(ref(db, '/'), {
-      ['catalogue/items/' + currentDescGroupBarcode + '/nameOverride']: nameOverride || null,
-      ['catalogue/items/' + currentDescGroupBarcode + '/showWeight']: showWeight,
-      ['catalogue/items/' + currentDescGroupBarcode + '/purity']: purity || null,
-      ['catalogue/items/' + currentDescGroupBarcode + '/groupRemarks']: groupRemarks || null,
-      ['catalogue/items/' + currentDescGroupBarcode + '/sizeChartId']: sizeChartId || null,
-    });
-    statusEl.textContent = 'Saved!';
-    setTimeout(() => { statusEl.textContent = ''; }, 2000);
-    loadExistingGroupDetails();
+    const snap = await get(ref(db, 'catalogue/sizeCharts'));
+    const val = snap.val() || {};
+    const charts = Object.keys(val).map(id => ({ id, name: val[id].name || id }));
+    charts.sort((a, b) => a.name.localeCompare(b.name));
+    select.innerHTML = '<option value="">No size chart linked</option>' +
+      charts.map(c => `<option value="${c.id}">${c.name.replace(/</g,'&lt;')}</option>`).join('');
+    select.value = selectedId || '';
   } catch (e) {
     console.error(e);
-    statusEl.textContent = 'Could not save — try again.';
   }
-});
+}
 
-// Saves Purity / Show Weight / Remarks / Size Chart / Display Name as this
-// category's persistent DEFAULT — every item in the category inherits this
-// automatically (including ones added to it later), unless that specific
-// item has its own override saved separately (barcode-specific overrides
-// always win over the category default; tag-specific overrides win over
-// both). This does not touch any individual item's own record at all.
-document.getElementById('desc-group-bulk-apply-btn').addEventListener('click', async () => {
-  if (!currentCategoryFilterKey) return;
-  const statusEl = document.getElementById('desc-group-save-status');
-  const nameOverride = document.getElementById('desc-group-name-override').value.trim();
+// Saves Purity / Show Weight / Remarks / Size Chart / Display Name / Chip
+// Label as this category's persistent DEFAULT — every item in the category
+// inherits this automatically (including ones added to it later), unless
+// that specific barcode/tag has a Tag-Specific entry of its own (which
+// always wins over this). Does not touch any individual item's own record.
+document.getElementById('desc-grp-save-btn').addEventListener('click', async () => {
+  if (!currentGroupEditKey) return;
+  const statusEl = document.getElementById('desc-grp-save-status');
+  const nameOverride = document.getElementById('desc-grp-name-override').value.trim();
   const categoryLabel = document.getElementById('desc-category-label').value.trim();
-  const showWeight = document.getElementById('desc-show-weight').checked;
-  const purity = document.getElementById('desc-purity').value.trim();
-  const groupRemarks = document.getElementById('desc-group-remarks').value.trim();
-  const sizeChartId = document.getElementById('desc-sizechart-select').value;
-  const label = homeCategoryLabel(currentCategoryFilterKey);
+  const showWeight = document.getElementById('desc-grp-show-weight').checked;
+  const purity = document.getElementById('desc-grp-purity').value.trim();
+  const groupRemarks = document.getElementById('desc-grp-remarks').value.trim();
+  const sizeChartId = document.getElementById('desc-grp-sizechart-select').value;
+  const label = homeCategoryLabel(currentGroupEditKey);
 
-  if (!confirm(`Set this as the default for every item in "${label}" (currently ${currentCategoryFilterCount} item(s), and any added later)? Items with their own specific override will keep using their own value instead. Proceed?`)) return;
+  if (!confirm(`Set this as the default for every item in "${label}" (currently ${currentGroupEditCount} item(s), and any added later)? Items with their own Tag-Specific entry will keep using their own value instead. Proceed?`)) return;
 
-  statusEl.textContent = 'Saving category default…';
+  statusEl.textContent = 'Saving group default…';
   try {
     await update(ref(db, '/'), {
-      ['catalogue/categorySettings/' + currentCategoryFilterKey]: { nameOverride, categoryLabel, showWeight, purity, groupRemarks, sizeChartId }
+      ['catalogue/categorySettings/' + currentGroupEditKey]: { nameOverride, categoryLabel, showWeight, purity, groupRemarks, sizeChartId }
     });
     statusEl.textContent = `Saved as the default for "${label}"!`;
     setTimeout(() => { statusEl.textContent = ''; }, 3000);
-    loadExistingCategoryDefaults();
+    loadGroupOverridesList();
   } catch (e) {
     console.error(e);
     statusEl.textContent = 'Could not save — try again.';
   }
 });
-
-// -------- Category Defaults Editor --------
-let currentCategoryDefaultsKey = null;
-
-document.getElementById('desc-category-select').addEventListener('change', async (e) => {
-  const key = e.target.value;
-  const fieldsEl = document.getElementById('desc-category-edit-fields');
-  const statusEl = document.getElementById('desc-category-save-status');
-  
-  if (!key) {
-    fieldsEl.style.display = 'none';
-    currentCategoryDefaultsKey = null;
-    return;
-  }
-  
-  statusEl.textContent = 'Loading…';
-  try {
-    const snap = await get(ref(db, 'catalogue/categorySettings/' + key));
-    const settings = snap.val() || {};
-    document.getElementById('desc-category-chip-label').value = settings.categoryLabel || '';
-    statusEl.textContent = '';
-    fieldsEl.style.display = 'block';
-    currentCategoryDefaultsKey = key;
-  } catch (e) {
-    console.error(e);
-    statusEl.textContent = 'Could not load settings — try again.';
-  }
-});
-
-document.getElementById('desc-category-save-btn').addEventListener('click', async () => {
-  if (!currentCategoryDefaultsKey) return;
-  const statusEl = document.getElementById('desc-category-save-status');
-  const categoryLabel = document.getElementById('desc-category-chip-label').value.trim();
-  
-  statusEl.textContent = 'Saving…';
-  try {
-    await update(ref(db, '/'), {
-      ['catalogue/categorySettings/' + currentCategoryDefaultsKey + '/categoryLabel']: categoryLabel || null
-    });
-    statusEl.textContent = 'Saved!';
-    setTimeout(() => { statusEl.textContent = ''; }, 2000);
-    loadExistingCategoryDefaults();
-  } catch (e) {
-    console.error(e);
-    statusEl.textContent = 'Could not save — try again.';
-  }
-});
-
-async function loadCategoryDefaultsDropdown(){
-  const select = document.getElementById('desc-category-select');
-  try {
-    const snap = await get(ref(db, 'catalogue/items'));
-    const items = snap.val() || {};
-    const keys = new Set();
-    Object.keys(items).forEach(bc => {
-      const node = items[bc];
-      if (node && node.available && node.displayName) {
-        const key = (node.displayName || '').toString().trim().toLowerCase();
-        if (key) keys.add(key);
-      }
-    });
-    const sortedKeys = Array.from(keys).sort();
-    select.innerHTML = '<option value="">— Select a category —</option>' +
-      sortedKeys.map(k => `<option value="${k.replace(/"/g,'&quot;')}">${k.replace(/</g,'&lt;').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}</option>`).join('');
-  } catch (e) {
-    console.error('[Category Defaults] could not load categories', e);
-  }
-}
-
-document.getElementById('desc-tag-load-btn').addEventListener('click', loadTagDescription);
-document.getElementById('desc-tag-scarcity-enabled').addEventListener('change', () => {
-  document.getElementById('desc-tag-scarcity-field').style.display = 
-    document.getElementById('desc-tag-scarcity-enabled').checked ? 'block' : 'none';
-});
-document.getElementById('desc-tag-barcode-input').addEventListener('keydown', e => {
-  if (e.key === 'Enter') { e.preventDefault(); loadTagDescription(); }
-});
-
-let currentDescTag = null;
-
-document.getElementById('desc-tag-close-btn').addEventListener('click', () => {
-  document.getElementById('desc-tag-fields').style.display = 'none';
-  document.getElementById('desc-tag-barcode-input').value = '';
-  document.getElementById('desc-tag-status').textContent = '';
-  currentDescTag = null;
-});
-
-// Older saved tag descriptions are a plain string; newer ones are an object
-// with weight/purity/name overrides too. This normalizes either into one shape.
-function normalizeTagDesc(raw){
-  if (!raw) return { text: '', showWeight: false, purity: '', nameOverride: '', scarcityEnabled: false, scarcityCount: 0 };
-  if (typeof raw === 'string') return { text: raw, showWeight: false, purity: '', nameOverride: '', scarcityEnabled: false, scarcityCount: 0 };
-  return { text: raw.text || '', showWeight: !!raw.showWeight, purity: raw.purity || '', nameOverride: raw.nameOverride || '', scarcityEnabled: !!raw.scarcityEnabled, scarcityCount: raw.scarcityCount || 0 };
-}
-
-async function loadTagDescription(){
-  const input = document.getElementById('desc-tag-barcode-input');
-  const tag = input.value.trim().toUpperCase();
-  const statusEl = document.getElementById('desc-tag-status');
-  const fieldsEl = document.getElementById('desc-tag-fields');
-  const refEl = document.getElementById('desc-tag-reference');
-  fieldsEl.style.display = 'none';
-  if (!tag) { statusEl.textContent = 'Enter a tag first.'; return; }
-
-  statusEl.textContent = 'Loading…';
-  try {
-    const [descSnap, productSnap] = await Promise.all([
-      get(ref(db, 'catalogue/tagDescriptions/' + tag)),
-      get(ref(db, 'jewelryData/products/' + tag)),
-    ]);
-    currentDescTag = tag;
-    const desc = normalizeTagDesc(descSnap.val());
-    document.getElementById('desc-tag-name').value = desc.nameOverride;
-    document.getElementById('desc-tag-text').value = desc.text;
-    document.getElementById('desc-tag-show-weight').checked = desc.showWeight;
-    document.getElementById('desc-tag-purity').value = desc.purity;
-    document.getElementById('desc-tag-scarcity-enabled').checked = desc.scarcityEnabled || false;
-    document.getElementById('desc-tag-scarcity-count').value = desc.scarcityCount || '';
-    document.getElementById('desc-tag-scarcity-field').style.display = desc.scarcityEnabled ? 'block' : 'none';
-
-    const product = productSnap.val();
-    if (product) {
-      const bits = [];
-      if (product.stamp) bits.push(`Purity: <b>${product.stamp}</b>`);
-      if (typeof product.netWeight === 'number' && product.netWeight > 0) bits.push(`Weight: <b>${product.netWeight}g</b>`);
-      refEl.innerHTML = bits.length ? bits.join(' &middot; ') : 'No weight/purity on record for this tag in stock.';
-    } else {
-      refEl.innerHTML = 'This tag was not found in the current stock list.';
-    }
-
-    statusEl.textContent = '';
-    fieldsEl.style.display = 'block';
-  } catch (e) {
-    console.error(e);
-    statusEl.textContent = 'Could not load — try again.';
-  }
-}
-
-document.getElementById('desc-tag-save-btn').addEventListener('click', async () => {
-  if (!currentDescTag) return;
-  const statusEl = document.getElementById('desc-tag-save-status');
-  const nameOverride = document.getElementById('desc-tag-name').value.trim();
-  const text = document.getElementById('desc-tag-text').value.trim();
-  const showWeight = document.getElementById('desc-tag-show-weight').checked;
-  const purity = document.getElementById('desc-tag-purity').value.trim();
-  const scarcityEnabled = document.getElementById('desc-tag-scarcity-enabled').checked;
-  const scarcityCount = scarcityEnabled ? (parseInt(document.getElementById('desc-tag-scarcity-count').value) || 0) : null;
-
-  statusEl.textContent = 'Saving…';
-  try {
-    const hasAnything = text || showWeight || purity || nameOverride || scarcityEnabled;
-    await update(ref(db, '/'), {
-      ['catalogue/tagDescriptions/' + currentDescTag]: hasAnything ? { text, showWeight, purity, nameOverride, scarcityEnabled, scarcityCount } : null,
-    });
-    statusEl.textContent = 'Saved!';
-    setTimeout(() => { statusEl.textContent = ''; }, 2000);
-    loadExistingTagDescriptions();
-  } catch (e) {
-    console.error(e);
-    statusEl.textContent = 'Could not save — try again.';
-  }
-});
-
-// Shows every tag that already has a description written, so you can jump
-// back into editing one without having to remember/retype its barcode.
-async function loadExistingTagDescriptions(){
-  const listEl = document.getElementById('desc-tag-existing-list');
-  listEl.innerHTML = '<div class="home-banner-row"><span class="cat" style="color:var(--ink-soft); font-weight:400;">Loading…</span></div>';
-  try {
-    const snap = await get(ref(db, 'catalogue/tagDescriptions'));
-    const val = snap.val() || {};
-    const tags = Object.keys(val).filter(t => val[t]);
-    if (!tags.length) {
-      listEl.innerHTML = '<div class="home-banner-row"><span class="cat" style="color:var(--ink-soft); font-weight:400;">No tag descriptions written yet.</span></div>';
-      return;
-    }
-
-    listEl.innerHTML = tags.sort().map(t => {
-      const d = normalizeTagDesc(val[t]);
-      const bits = [d.nameOverride ? `name: "${d.nameOverride}"` : null, d.purity, d.showWeight ? 'weight shown' : null].filter(Boolean);
-      const summary = d.text ? d.text : (bits.length ? '' : '(no note — only overrides set)');
-      return `
-        <div class="home-banner-row existing-row-clickable" data-tag="${t}">
-          <span class="cat" style="flex:1;">${t}${bits.length ? ` <span style="color:var(--ink-soft); font-weight:400;">— ${bits.join(' · ')}</span>` : ''}</span>
-          <p class="review-row-text" style="max-width:180px;">${summary.replace(/</g, '&lt;')}</p>
-        </div>
-      `;
-    }).join('');
-    listEl.querySelectorAll('.existing-row-clickable').forEach(row => {
-      row.addEventListener('click', () => {
-        document.getElementById('desc-tag-barcode-input').value = row.dataset.tag;
-        loadTagDescription();
-      });
-    });
-  } catch (e) {
-    console.error(e);
-    listEl.innerHTML = '';
-  }
-}
-
-// Shows every group that already has weight/purity/remarks configured,
-// alongside its item name for context.
-async function loadExistingGroupDetails(){
-  const listEl = document.getElementById('desc-group-existing-list');
-  listEl.innerHTML = '<div class="home-banner-row"><span class="cat" style="color:var(--ink-soft); font-weight:400;">Loading…</span></div>';
-  try {
-    const snap = await get(ref(db, 'catalogue/items'));
-    const val = snap.val() || {};
-    const bcs = Object.keys(val).filter(bc => val[bc] && (val[bc].purity || val[bc].groupRemarks || typeof val[bc].showWeight === 'boolean' || val[bc].sizeChartId || val[bc].nameOverride || val[bc].scarcityEnabled));
-    if (!bcs.length) {
-      listEl.innerHTML = '<div class="home-banner-row"><span class="cat" style="color:var(--ink-soft); font-weight:400;">No individual item overrides set yet.</span></div>';
-      return;
-    }
-    listEl.innerHTML = bcs.sort().map(bc => {
-      const n = val[bc];
-      const itemName = n.displayName || bc;
-      const bits = [n.purity, n.showWeight ? 'weight shown' : null, (n.scarcityEnabled && n.scarcityCount) ? `Only ${n.scarcityCount} Left` : null].filter(Boolean).join(' · ');
-      return `
-        <div class="home-banner-row existing-row-clickable" data-bc="${bc}">
-          <span class="cat" style="flex:1;">${bc} <span style="color:var(--ink-soft); font-weight:400;">— ${itemName}</span></span>
-          <p class="review-row-text" style="max-width:150px;">${bits}</p>
-          <button class="manage-del-btn" data-bc="${bc}" title="Remove this item's override">🗑</button>
-        </div>`;
-    }).join('');
-    listEl.querySelectorAll('.existing-row-clickable').forEach(row => {
-      row.addEventListener('click', e => {
-        if (e.target.closest('.manage-del-btn')) return; // let the delete button handle its own click
-        document.getElementById('desc-group-barcode-input').value = row.dataset.bc;
-        loadGroupDetails();
-      });
-    });
-    listEl.querySelectorAll('.manage-del-btn').forEach(btn => {
-      btn.addEventListener('click', e => {
-        e.stopPropagation();
-        deleteItemOverride(btn.dataset.bc);
-      });
-    });
-  } catch (e) {
-    console.error(e);
-    listEl.innerHTML = '';
-  }
-}
-
-async function deleteItemOverride(bc){
-  if (!confirm(`Remove ${bc}'s own override? It'll go back to inheriting purely from its category's default (if one is set) or the plain stock name/no purity/etc.`)) return;
-  try {
-    await update(ref(db, '/'), {
-      ['catalogue/items/' + bc + '/nameOverride']: null,
-      ['catalogue/items/' + bc + '/showWeight']: null,
-      ['catalogue/items/' + bc + '/purity']: null,
-      ['catalogue/items/' + bc + '/groupRemarks']: null,
-      ['catalogue/items/' + bc + '/sizeChartId']: null,
-    });
-    // If this exact barcode happens to be open in the form right now, clear it there too.
-    if (currentDescGroupBarcode === bc) {
-      document.getElementById('desc-group-close-btn').click();
-    }
-    loadExistingGroupDetails();
-  } catch (e) {
-    console.error(e);
-    alert('Could not remove — try again.');
-  }
-}
 
 // Shows every category that has a persistent default configured — clicking
-// one jumps straight to editing that category's default via the same
-// dropdown/flow above.
-async function loadExistingCategoryDefaults(){
+// one jumps straight to editing that category's default via the dropdown above.
+async function loadGroupOverridesList(){
   const listEl = document.getElementById('desc-category-defaults-list');
   listEl.innerHTML = '<div class="home-banner-row"><span class="cat" style="color:var(--ink-soft); font-weight:400;">Loading…</span></div>';
   try {
     const snap = await get(ref(db, 'catalogue/categorySettings'));
     const val = snap.val() || {};
-    const keys = Object.keys(val).filter(k => val[k] && (val[k].purity || val[k].groupRemarks || val[k].showWeight || val[k].sizeChartId || val[k].nameOverride || val[k].scarcityEnabled || val[k].categoryLabel));
+    const keys = Object.keys(val).filter(k => val[k] && (val[k].purity || val[k].groupRemarks || val[k].showWeight || val[k].sizeChartId || val[k].nameOverride || val[k].categoryLabel));
     if (!keys.length) {
-      listEl.innerHTML = '<div class="home-banner-row"><span class="cat" style="color:var(--ink-soft); font-weight:400;">No category defaults set yet.</span></div>';
+      listEl.innerHTML = '<div class="home-banner-row"><span class="cat" style="color:var(--ink-soft); font-weight:400;">No group defaults set yet.</span></div>';
       return;
     }
     listEl.innerHTML = keys.sort().map(k => {
       const c = val[k];
       const heading = c.categoryLabel ? `${homeCategoryLabel(k)} → shown as "${c.categoryLabel}"` : homeCategoryLabel(k);
-      const bits = [c.purity, c.showWeight ? 'weight shown' : null, (c.scarcityEnabled && c.scarcityCount) ? `Only ${c.scarcityCount} Left` : null].filter(Boolean).join(' · ');
+      const bits = [c.purity, c.showWeight ? 'weight shown' : null].filter(Boolean).join(' · ');
       return `
         <div class="home-banner-row existing-row-clickable" data-key="${k}">
           <span class="cat" style="flex:1;">${heading}</span>
@@ -2963,7 +2556,7 @@ async function loadExistingCategoryDefaults(){
     listEl.querySelectorAll('.manage-del-btn').forEach(btn => {
       btn.addEventListener('click', e => {
         e.stopPropagation();
-        deleteCategoryDefault(btn.dataset.key);
+        deleteGroupOverride(btn.dataset.key);
       });
     });
   } catch (e) {
@@ -2972,14 +2565,253 @@ async function loadExistingCategoryDefaults(){
   }
 }
 
-async function deleteCategoryDefault(key){
+async function deleteGroupOverride(key){
   if (!confirm(`Remove the default for "${homeCategoryLabel(key)}"? Items in this category will go back to showing their own individual settings only (or nothing, if they never had their own).`)) return;
   try {
     await update(ref(db, '/'), { ['catalogue/categorySettings/' + key]: null });
-    if (currentCategoryFilterKey === key) {
-      document.getElementById('desc-group-close-btn').click();
+    if (currentGroupEditKey === key) {
+      document.getElementById('desc-group-category-filter').value = '';
+      document.getElementById('desc-grp-fields').style.display = 'none';
+      currentGroupEditKey = '';
     }
-    loadExistingCategoryDefaults();
+    loadGroupOverridesList();
+  } catch (e) {
+    console.error(e);
+    alert('Could not remove — try again.');
+  }
+}
+
+// ===== Tag-Specific (merged: what used to be "Barcode Override" plus the
+// old per-tag scarcity/note fields — one barcode/tag, one form, one save) =====
+document.getElementById('desc-tag-load-btn').addEventListener('click', loadTagOverride);
+document.getElementById('desc-tag-scarcity-enabled').addEventListener('change', () => {
+  document.getElementById('desc-tag-scarcity-field').style.display =
+    document.getElementById('desc-tag-scarcity-enabled').checked ? 'block' : 'none';
+});
+document.getElementById('desc-tag-barcode-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); loadTagOverride(); }
+});
+
+let currentDescTag = null;
+let tagEditRequestToken = 0; // guards against a slow async load finishing after a newer one started
+
+document.getElementById('desc-tag-close-btn').addEventListener('click', () => {
+  tagEditRequestToken++; // invalidate anything still in flight
+  document.getElementById('desc-tag-fields').style.display = 'none';
+  document.getElementById('desc-tag-barcode-input').value = '';
+  document.getElementById('desc-tag-status').textContent = '';
+  document.getElementById('desc-tag-reference').textContent = '';
+  currentDescTag = null;
+});
+
+// Older saved tag descriptions are a plain string; newer ones are an object.
+// This normalizes either into one shape (scarcity is all that's still
+// stored here going forward — name/weight/purity/remarks/size chart now
+// live on the barcode's own catalogue/items record instead, see below).
+function normalizeTagDesc(raw){
+  if (!raw) return { text: '', showWeight: false, purity: '', nameOverride: '', scarcityEnabled: false, scarcityCount: 0 };
+  if (typeof raw === 'string') return { text: raw, showWeight: false, purity: '', nameOverride: '', scarcityEnabled: false, scarcityCount: 0 };
+  return { text: raw.text || '', showWeight: !!raw.showWeight, purity: raw.purity || '', nameOverride: raw.nameOverride || '', scarcityEnabled: !!raw.scarcityEnabled, scarcityCount: raw.scarcityCount || 0 };
+}
+
+async function populateTagSizeChartDropdown(selectedId){
+  const select = document.getElementById('desc-tag-sizechart-select');
+  try {
+    const snap = await get(ref(db, 'catalogue/sizeCharts'));
+    const val = snap.val() || {};
+    const charts = Object.keys(val).map(id => ({ id, name: val[id].name || id }));
+    charts.sort((a, b) => a.name.localeCompare(b.name));
+    select.innerHTML = '<option value="">No size chart linked</option>' +
+      charts.map(c => `<option value="${c.id}">${c.name.replace(/</g,'&lt;')}</option>`).join('');
+    select.value = selectedId || '';
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+async function loadTagOverride(){
+  const input = document.getElementById('desc-tag-barcode-input');
+  const tag = input.value.trim().toUpperCase();
+  const statusEl = document.getElementById('desc-tag-status');
+  const fieldsEl = document.getElementById('desc-tag-fields');
+  const refEl = document.getElementById('desc-tag-reference');
+  fieldsEl.style.display = 'none';
+  refEl.textContent = '';
+  if (!tag) { statusEl.textContent = 'Enter a tag/barcode first.'; return; }
+
+  const myToken = ++tagEditRequestToken;
+  statusEl.textContent = 'Loading…';
+  try {
+    const [itemSnap, descSnap, productSnap] = await Promise.all([
+      get(ref(db, 'catalogue/items/' + tag)),
+      get(ref(db, 'catalogue/tagDescriptions/' + tag)),
+      get(ref(db, 'jewelryData/products/' + tag)),
+    ]);
+    if (myToken !== tagEditRequestToken) return; // a newer load started while this was in flight
+
+    const node = itemSnap.val();
+    if (!node) {
+      statusEl.textContent = 'No photos found for ' + tag + ' — upload photos for it first.';
+      return;
+    }
+    currentDescTag = tag;
+
+    // Fetch the group default for this item's category BEFORE filling the
+    // fields — every field below pre-fills with this tag's own override if
+    // it has one, otherwise the group default, so there's usually something
+    // sensible already sitting in the field to tweak instead of a blank
+    // one to fill in from scratch. Saving still only writes what's here, so
+    // clearing a field back to empty goes back to auto-inheriting it.
+    const catKey = homeCategoryKey(node.displayName || '');
+    const groupSnap = await get(ref(db, 'catalogue/categorySettings/' + catKey));
+    if (myToken !== tagEditRequestToken) return;
+    const grp = groupSnap.val() || {};
+
+    // Old tagDescriptions entries (if any) are only consulted as a fallback
+    // for fields that predate this merge — new saves write name/weight/
+    // purity/remarks/size chart to the item record only, and tagDescriptions
+    // going forward holds just the scarcity badge.
+    const desc = normalizeTagDesc(descSnap.val());
+    document.getElementById('desc-tag-name').value = node.nameOverride || desc.nameOverride || grp.nameOverride || '';
+    document.getElementById('desc-tag-name').placeholder = 'Currently: ' + (node.displayName || 'no name set yet');
+    document.getElementById('desc-tag-show-weight').checked = (typeof node.showWeight === 'boolean') ? node.showWeight : !!grp.showWeight;
+    document.getElementById('desc-tag-purity').value = node.purity || desc.purity || grp.purity || '';
+    document.getElementById('desc-tag-text').value = node.groupRemarks || desc.text || grp.groupRemarks || '';
+    await populateTagSizeChartDropdown(node.sizeChartId || grp.sizeChartId || '');
+    document.getElementById('desc-tag-scarcity-enabled').checked = desc.scarcityEnabled || false;
+    document.getElementById('desc-tag-scarcity-count').value = desc.scarcityCount || '';
+    document.getElementById('desc-tag-scarcity-field').style.display = desc.scarcityEnabled ? 'block' : 'none';
+    if (myToken !== tagEditRequestToken) return;
+
+    // Reference line: shows where the pre-filled values above came from —
+    // the Group default one level up, and the raw POS stock record at the
+    // very base of the stack.
+    const product = productSnap.val();
+
+    const bits = [];
+    const groupBits = [grp.purity, grp.showWeight ? 'weight shown' : null].filter(Boolean).join(' · ');
+    bits.push(groupBits ? `Group default ("${homeCategoryLabel(catKey)}"): ${groupBits}` : `No group default set for "${homeCategoryLabel(catKey)}" yet`);
+    if (product && (product.stamp || (typeof product.netWeight === 'number' && product.netWeight > 0))) {
+      const posBits = [product.stamp ? `purity ${product.stamp}` : null, (typeof product.netWeight === 'number' && product.netWeight > 0) ? `${product.netWeight}g` : null].filter(Boolean).join(' · ');
+      bits.push(`POS record: ${posBits}`);
+    }
+    refEl.innerHTML = bits.join('<br>');
+
+    statusEl.textContent = '';
+    fieldsEl.style.display = 'block';
+  } catch (e) {
+    if (myToken !== tagEditRequestToken) return;
+    console.error(e);
+    statusEl.textContent = 'Could not load — try again.';
+  }
+}
+
+document.getElementById('desc-tag-save-btn').addEventListener('click', async () => {
+  if (!currentDescTag) return;
+  const statusEl = document.getElementById('desc-tag-save-status');
+  const nameOverride = document.getElementById('desc-tag-name').value.trim();
+  const showWeight = document.getElementById('desc-tag-show-weight').checked;
+  const purity = document.getElementById('desc-tag-purity').value.trim();
+  const groupRemarks = document.getElementById('desc-tag-text').value.trim();
+  const sizeChartId = document.getElementById('desc-tag-sizechart-select').value;
+  const scarcityEnabled = document.getElementById('desc-tag-scarcity-enabled').checked;
+  const scarcityCount = scarcityEnabled ? (parseInt(document.getElementById('desc-tag-scarcity-count').value) || 0) : null;
+
+  statusEl.textContent = 'Saving…';
+  try {
+    await update(ref(db, '/'), {
+      // Name / weight / purity / remarks / size chart all live on the
+      // barcode's own item record now — this is the one and only place
+      // that writes them (the old separate "Barcode Override" section is
+      // gone; this replaces it).
+      ['catalogue/items/' + currentDescTag + '/nameOverride']: nameOverride || null,
+      ['catalogue/items/' + currentDescTag + '/showWeight']: showWeight,
+      ['catalogue/items/' + currentDescTag + '/purity']: purity || null,
+      ['catalogue/items/' + currentDescTag + '/groupRemarks']: groupRemarks || null,
+      ['catalogue/items/' + currentDescTag + '/sizeChartId']: sizeChartId || null,
+      // tagDescriptions is retired down to scarcity-only — clears any old
+      // text/purity/weight/name that used to live here too, so there's a
+      // single source of truth for everything except the badge.
+      ['catalogue/tagDescriptions/' + currentDescTag]: scarcityEnabled ? { scarcityEnabled, scarcityCount } : null,
+    });
+    statusEl.textContent = 'Saved!';
+    setTimeout(() => { statusEl.textContent = ''; }, 2000);
+    loadTagOverridesList();
+  } catch (e) {
+    console.error(e);
+    statusEl.textContent = 'Could not save — try again.';
+  }
+});
+
+// Shows every barcode/tag that has its own override (name/weight/purity/
+// remarks/size chart on the item record, and/or a scarcity badge), so you
+// can jump back into editing one without having to remember/retype it.
+async function loadTagOverridesList(){
+  const listEl = document.getElementById('desc-tag-existing-list');
+  listEl.innerHTML = '<div class="home-banner-row"><span class="cat" style="color:var(--ink-soft); font-weight:400;">Loading…</span></div>';
+  try {
+    const [itemsSnap, descSnap] = await Promise.all([
+      get(ref(db, 'catalogue/items')),
+      get(ref(db, 'catalogue/tagDescriptions')),
+    ]);
+    const items = itemsSnap.val() || {};
+    const descs = descSnap.val() || {};
+    const keys = new Set([
+      ...Object.keys(items).filter(bc => items[bc] && (items[bc].purity || items[bc].groupRemarks || typeof items[bc].showWeight === 'boolean' || items[bc].sizeChartId || items[bc].nameOverride)),
+      ...Object.keys(descs).filter(t => descs[t]),
+    ]);
+    if (!keys.size) {
+      listEl.innerHTML = '<div class="home-banner-row"><span class="cat" style="color:var(--ink-soft); font-weight:400;">No tag-specific entries set yet.</span></div>';
+      return;
+    }
+    listEl.innerHTML = Array.from(keys).sort().map(k => {
+      const n = items[k] || {};
+      const d = normalizeTagDesc(descs[k]);
+      const itemName = n.displayName || k;
+      const bits = [n.purity, n.showWeight ? 'weight shown' : null, (d.scarcityEnabled && d.scarcityCount) ? `Only ${d.scarcityCount} Left` : null].filter(Boolean).join(' · ');
+      return `
+        <div class="home-banner-row existing-row-clickable" data-tag="${k}">
+          <span class="cat" style="flex:1;">${k} <span style="color:var(--ink-soft); font-weight:400;">— ${itemName}</span></span>
+          <p class="review-row-text" style="max-width:150px;">${bits}</p>
+          <button class="manage-del-btn" data-tag="${k}" title="Remove this tag's override">🗑</button>
+        </div>`;
+    }).join('');
+    listEl.querySelectorAll('.existing-row-clickable').forEach(row => {
+      row.addEventListener('click', e => {
+        if (e.target.closest('.manage-del-btn')) return;
+        document.getElementById('desc-tag-barcode-input').value = row.dataset.tag;
+        loadTagOverride();
+      });
+    });
+    listEl.querySelectorAll('.manage-del-btn').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        deleteTagOverride(btn.dataset.tag);
+      });
+    });
+  } catch (e) {
+    console.error(e);
+    listEl.innerHTML = '';
+  }
+}
+
+async function deleteTagOverride(tag){
+  if (!confirm(`Remove ${tag}'s tag-specific override? It'll go back to inheriting purely from its group's default (if one is set) or the plain stock name/no purity/etc.`)) return;
+  try {
+    await update(ref(db, '/'), {
+      ['catalogue/items/' + tag + '/nameOverride']: null,
+      ['catalogue/items/' + tag + '/showWeight']: null,
+      ['catalogue/items/' + tag + '/purity']: null,
+      ['catalogue/items/' + tag + '/groupRemarks']: null,
+      ['catalogue/items/' + tag + '/sizeChartId']: null,
+      ['catalogue/items/' + tag + '/scarcityEnabled']: null, // clears any legacy scarcity remnant too
+      ['catalogue/items/' + tag + '/scarcityCount']: null,
+      ['catalogue/tagDescriptions/' + tag]: null,
+    });
+    if (currentDescTag === tag) {
+      document.getElementById('desc-tag-close-btn').click();
+    }
+    loadTagOverridesList();
   } catch (e) {
     console.error(e);
     alert('Could not remove — try again.');
