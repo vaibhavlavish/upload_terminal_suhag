@@ -301,7 +301,6 @@
       <div class="tab-btn" id="tab-aienhance-btn">✨ AI Enhance</div>
       <div class="tab-btn" id="tab-reverify-btn">🔍 Reverify</div>
       <div class="tab-btn" id="tab-tagmanage-btn">🗂 Tag Manage</div>
-      <div class="tab-btn" id="tab-customprice-btn">🧮 Custom Price</div>
       <div class="tab-btn" id="tab-customcat-btn">🏷 Custom Categories</div>
     </div>
 
@@ -821,48 +820,38 @@
           <button class="btn secondary" id="desc-tag-clear-btn" type="button" style="margin-top:8px;">Clear Override (Back to Group Default)</button>
           <p class="link-status" id="desc-tag-save-status"></p>
         </div>
-      </div>
-    </div>
 
-    <!-- CUSTOM PRICE TAB (catalogue-only making-charge override, per exact tag) -->
-    <div class="tab-pane" id="tab-customprice">
-      <p class="note" style="margin-top:0;">Adjust the making charge (and even the making type) used for a specific tag's price on the catalogue — this never touches that tag's real making data in the POS, and has no effect on in-store price checking. Leave it unset and the catalogue just uses whatever's actually in the POS, same as always.</p>
+        <p class="section-label" style="margin-top:26px;">Catalogue Price Override</p>
+        <p class="note" style="margin-top:0;">Adjust the making charge (and even the making type) used for this tag's price on the catalogue — this never touches its real making data in the POS, and has no effect on in-store price checking. Leave it unset and the catalogue just uses whatever's actually in the POS, same as always.</p>
+        <p class="manage-status" id="cprice-status"></p>
 
-      <div class="link-search">
-        <input type="text" id="cprice-tag-input" autocomplete="off" placeholder="Enter the exact tag/barcode">
-        <button class="btn" id="cprice-load-btn">Load</button>
-      </div>
-      <p class="manage-status" id="cprice-status"></p>
+        <div id="cprice-fields" style="display:none;">
+          <div class="home-add-card">
+            <p style="margin:0 0 6px; font-weight:700; font-size:13.5px;" id="cprice-current-heading"></p>
+            <p class="note" style="margin-top:0;" id="cprice-current-pos"></p>
 
-      <div id="cprice-fields" style="display:none;">
-        <div class="home-add-card">
-          <p style="margin:0 0 6px; font-weight:700; font-size:13.5px;" id="cprice-current-heading"></p>
-          <p class="note" style="margin-top:0;" id="cprice-current-pos"></p>
+            <div class="field">
+              <label>Making type for the catalogue price</label>
+              <select id="cprice-making-type">
+                <option value="%">Percentage (%)</option>
+                <option value="wastage">Wastage (%)</option>
+                <option value="per g">Per Gram (₹/g)</option>
+                <option value="per pc">Per Piece (₹)</option>
+                <option value="MRP">MRP (flat amount)</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Making value</label>
+              <input type="number" id="cprice-making-value" min="0" step="0.01" placeholder="e.g. 31">
+            </div>
+            <p class="note" style="margin-top:0;" id="cprice-preview"></p>
 
-          <div class="field">
-            <label>Making type for the catalogue price</label>
-            <select id="cprice-making-type">
-              <option value="%">Percentage (%)</option>
-              <option value="wastage">Wastage (%)</option>
-              <option value="per g">Per Gram (₹/g)</option>
-              <option value="per pc">Per Piece (₹)</option>
-              <option value="MRP">MRP (flat amount)</option>
-            </select>
+            <button class="btn" id="cprice-save-btn">Save Catalogue Override</button>
+            <button class="btn secondary" id="cprice-remove-btn" type="button" style="margin-top:8px;">Remove Override (Use POS Default)</button>
+            <p class="link-status" id="cprice-save-status"></p>
           </div>
-          <div class="field">
-            <label>Making value</label>
-            <input type="number" id="cprice-making-value" min="0" step="0.01" placeholder="e.g. 31">
-          </div>
-          <p class="note" style="margin-top:0;" id="cprice-preview"></p>
-
-          <button class="btn" id="cprice-save-btn">Save Catalogue Override</button>
-          <button class="btn secondary" id="cprice-remove-btn" type="button" style="margin-top:8px;">Remove Override (Use POS Default)</button>
-          <p class="link-status" id="cprice-save-status"></p>
         </div>
       </div>
-
-      <p class="section-label" style="margin-top:10px;">Overrides Currently Set</p>
-      <div class="home-banner-list" id="cprice-existing-list"></div>
     </div>
 
     <!-- CUSTOM CATEGORIES TAB (manually curated collections, independent of item names) -->
@@ -956,7 +945,6 @@ document.getElementById('tab-sizecharts-btn').addEventListener('click', () => sw
 document.getElementById('tab-aienhance-btn').addEventListener('click', () => switchTab('aienhance'));
 document.getElementById('tab-reverify-btn').addEventListener('click', () => switchTab('reverify'));
 document.getElementById('tab-tagmanage-btn').addEventListener('click', () => switchTab('tagmanage'));
-document.getElementById('tab-customprice-btn').addEventListener('click', () => switchTab('customprice'));
 document.getElementById('tab-customcat-btn').addEventListener('click', () => switchTab('customcat'));
 function switchTab(name){
   document.getElementById('tab-scan-btn').classList.toggle('active', name==='scan');
@@ -969,7 +957,6 @@ function switchTab(name){
   document.getElementById('tab-aienhance-btn').classList.toggle('active', name==='aienhance');
   document.getElementById('tab-reverify-btn').classList.toggle('active', name==='reverify');
   document.getElementById('tab-tagmanage-btn').classList.toggle('active', name==='tagmanage');
-  document.getElementById('tab-customprice-btn').classList.toggle('active', name==='customprice');
   document.getElementById('tab-customcat-btn').classList.toggle('active', name==='customcat');
   document.getElementById('tab-scan').classList.toggle('active', name==='scan');
   document.getElementById('tab-bulk').classList.toggle('active', name==='bulk');
@@ -981,7 +968,6 @@ function switchTab(name){
   document.getElementById('tab-aienhance').classList.toggle('active', name==='aienhance');
   document.getElementById('tab-reverify').classList.toggle('active', name==='reverify');
   document.getElementById('tab-tagmanage').classList.toggle('active', name==='tagmanage');
-  document.getElementById('tab-customprice').classList.toggle('active', name==='customprice');
   document.getElementById('tab-customcat').classList.toggle('active', name==='customcat');
   if (name === 'home') { loadHomeCategories(); loadHomeBanners(); loadMarqueeText(); loadTrendingList(); loadCatIconCategories(); loadExistingCatIcons(); loadReels(); loadReelCategories(); }
   if (name === 'reviews') loadGoogleReviewsForManagement();
@@ -990,7 +976,6 @@ function switchTab(name){
   if (name === 'sizecharts') loadSizeCharts();
   if (name === 'reverify') loadReverificationQueue();
   if (name === 'tagmanage') loadAllItemsOverview();
-  if (name === 'customprice') loadCustomPriceOverridesList();
   if (name === 'customcat') loadCustomCategories();
   if (name === 'aienhance') { loadAiEnhancePrompt(); loadAiEnhanceBatchCategories(); }
   if (name !== 'scan') resetCapture();
@@ -2732,8 +2717,11 @@ document.getElementById('tagmanage-close-btn').addEventListener('click', () => {
   document.getElementById('desc-tag-fields').style.display = 'none';
   document.getElementById('desc-tag-status').textContent = '';
   document.getElementById('desc-tag-reference').textContent = '';
+  document.getElementById('cprice-fields').style.display = 'none';
+  document.getElementById('cprice-status').textContent = '';
   currentManageBarcode = null;
   currentDescTag = null;
+  currentCustomPriceTag = null;
 });
 
 // Older saved tag descriptions are a plain string; newer ones are an object.
@@ -3490,6 +3478,7 @@ function openTagManageBox(bc){
   document.getElementById('tagmanage-heading').textContent = 'Managing: ' + bc;
   loadManagePhotos(bc);
   loadTagOverride(bc);
+  loadCustomPrice(bc);
   document.getElementById('tagmanage-box').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
@@ -3706,34 +3695,28 @@ function resolveRawMakingInfo(d){
 
 let currentCustomPriceTag = null;
 
-document.getElementById('cprice-load-btn').addEventListener('click', loadCustomPrice);
-document.getElementById('cprice-tag-input').addEventListener('keydown', e => {
-  if (e.key === 'Enter') { e.preventDefault(); loadCustomPrice(); }
-});
-
-async function loadCustomPrice(){
-  const input = document.getElementById('cprice-tag-input');
-  const tag = input.value.trim().toUpperCase();
+async function loadCustomPrice(tag){
+  const barcode = (tag || currentCustomPriceTag || '').trim().toUpperCase();
   const statusEl = document.getElementById('cprice-status');
   const fieldsEl = document.getElementById('cprice-fields');
   fieldsEl.style.display = 'none';
-  if (!tag) { statusEl.textContent = 'Enter a tag first.'; return; }
+  if (!barcode) { statusEl.textContent = 'Enter a tag first.'; return; }
 
   statusEl.textContent = 'Loading…';
   try {
     const [productSnap, overrideSnap] = await Promise.all([
-      get(ref(db, 'jewelryData/products/' + tag)),
-      get(ref(db, 'catalogue/tagMakingOverrides/' + tag)),
+      get(ref(db, 'jewelryData/products/' + barcode)),
+      get(ref(db, 'catalogue/tagMakingOverrides/' + barcode)),
     ]);
     const d = productSnap.val();
     if (!d) {
-      statusEl.textContent = `"${tag}" wasn't found in the POS — check the tag and try again.`;
+      statusEl.textContent = `"${barcode}" wasn't found in the POS — check the tag and try again.`;
       return;
     }
-    currentCustomPriceTag = tag;
+    currentCustomPriceTag = barcode;
 
     const raw = resolveRawMakingInfo(d);
-    document.getElementById('cprice-current-heading').textContent = `${tag} — ${(d.itemName || '').trim()}`;
+    document.getElementById('cprice-current-heading').textContent = `${barcode} — ${(d.itemName || '').trim()}`;
     document.getElementById('cprice-current-pos').textContent = raw
       ? `Currently in POS: ${raw.label}`
       : 'Currently in POS: no making data found for this tag.';
@@ -3773,7 +3756,7 @@ document.getElementById('cprice-save-btn').addEventListener('click', async () =>
     });
     statusEl.textContent = 'Saved! The catalogue will pick this up on its next price sync.';
     setTimeout(() => { statusEl.textContent = ''; }, 3000);
-    loadCustomPriceOverridesList();
+    loadAllItemsOverview(); // refreshes the (priced) indicator on the grouped list behind this box
   } catch (e) {
     console.error(e);
     statusEl.textContent = 'Could not save — try again.';
@@ -3788,75 +3771,27 @@ document.getElementById('cprice-remove-btn').addEventListener('click', async () 
     await update(ref(db, '/'), { ['catalogue/tagMakingOverrides/' + currentCustomPriceTag]: null });
     statusEl.textContent = 'Removed — back to the POS default.';
     setTimeout(() => { statusEl.textContent = ''; }, 3000);
-    loadCustomPrice();
-    loadCustomPriceOverridesList();
+    loadCustomPrice(currentCustomPriceTag);
+    loadAllItemsOverview();
   } catch (e) {
     console.error(e);
     statusEl.textContent = 'Could not remove — try again.';
   }
 });
 
-async function loadCustomPriceOverridesList(){
-  const listEl = document.getElementById('cprice-existing-list');
-  listEl.innerHTML = '<div class="home-banner-row"><span class="cat" style="color:var(--ink-soft); font-weight:400;">Loading…</span></div>';
-  try {
-    const snap = await get(ref(db, 'catalogue/tagMakingOverrides'));
-    const val = snap.val() || {};
-    const tags = Object.keys(val).filter(t => val[t] && val[t].makingType);
-    if (!tags.length) {
-      listEl.innerHTML = '<div class="home-banner-row"><span class="cat" style="color:var(--ink-soft); font-weight:400;">No catalogue price overrides set yet.</span></div>';
-      return;
-    }
-    listEl.innerHTML = tags.sort().map(t => {
-      const o = val[t];
-      const label = o.makingType === 'MRP' ? `MRP ₹${o.makingInput}`
-        : o.makingType === 'per pc' ? `Per Piece ₹${o.makingInput}`
-        : o.makingType === 'per g' ? `Per Gram ₹${o.makingInput}/g`
-        : o.makingType === 'wastage' ? `Wastage ${o.makingInput}%`
-        : `Percentage ${o.makingInput}%`;
-      return `
-        <div class="home-banner-row existing-row-clickable" data-tag="${t}">
-          <span class="cat" style="flex:1;">${t} <span style="color:var(--ink-soft); font-weight:400;">— ${label}</span></span>
-          <button class="manage-del-btn" data-tag="${t}" title="Remove this override">🗑</button>
-        </div>`;
-    }).join('');
-    listEl.querySelectorAll('.existing-row-clickable').forEach(row => {
-      row.addEventListener('click', e => {
-        if (e.target.closest('.manage-del-btn')) return;
-        document.getElementById('cprice-tag-input').value = row.dataset.tag;
-        loadCustomPrice();
-      });
-    });
-    listEl.querySelectorAll('.manage-del-btn').forEach(btn => {
-      btn.addEventListener('click', async e => {
-        e.stopPropagation();
-        const t = btn.dataset.tag;
-        if (!confirm(`Remove the catalogue override for ${t}?`)) return;
-        try {
-          await update(ref(db, '/'), { ['catalogue/tagMakingOverrides/' + t]: null });
-          loadCustomPriceOverridesList();
-          if (currentCustomPriceTag === t) loadCustomPrice();
-        } catch (err) {
-          console.error(err);
-          alert('Could not remove — try again.');
-        }
-      });
-    });
-  } catch (e) {
-    console.error(e);
-    listEl.innerHTML = '';
-  }
-}
-
 // ---------- All Items: a full group-wise overview of every barcode and its linked tags ----------
-let allItemsCache = { items: {} };
+let allItemsCache = { items: {}, priceOverrides: {} };
 
 async function loadAllItemsOverview(){
   const statusEl = document.getElementById('allitems-status');
   statusEl.textContent = 'Loading…';
   try {
-    const snap = await get(ref(db, 'catalogue/items'));
-    allItemsCache.items = snap.val() || {};
+    const [itemsSnap, priceSnap] = await Promise.all([
+      get(ref(db, 'catalogue/items')),
+      get(ref(db, 'catalogue/tagMakingOverrides')),
+    ]);
+    allItemsCache.items = itemsSnap.val() || {};
+    allItemsCache.priceOverrides = priceSnap.val() || {};
     statusEl.textContent = '';
     renderAllItemsList();
   } catch (e) {
@@ -3872,6 +3807,8 @@ function renderItemSubRow(bc, node, tags){
   const isSoldOut = !node.available;
   const availTag = isSoldOut ? ' <span style="color:#B5442E;">(sold out)</span>' : '';
   const hiddenTag = node.hidden ? ' <span style="color:#B5442E;">(hidden)</span>' : '';
+  const hasPriceOverride = tags.some(t => allItemsCache.priceOverrides && allItemsCache.priceOverrides[t]);
+  const pricedTag = hasPriceOverride ? ' <span style="color:#2E7D32;">(priced)</span>' : '';
   const tagsText = tags.length > 1 ? tags.join(', ') : tags[0] + ' (unlinked)';
   // "Sold out" here only reflects this catalogue entry's own `available`
   // flag, which the POS updates after a sale/return/rate-change/import — a
@@ -3880,7 +3817,7 @@ function renderItemSubRow(bc, node, tags){
   const recheckBtn = isSoldOut ? `<button class="manage-del-btn recheck-avail-btn" data-bc="${bc}" title="Recheck stock and fix if it's actually in stock">↻</button>` : '';
   return `
     <div class="home-banner-row existing-row-clickable" data-bc="${bc}">
-      <span class="cat" style="flex:1; padding-left:16px;">${bc}${availTag}${hiddenTag} <span style="color:var(--ink-soft); font-weight:400;">${tagsText}</span></span>
+      <span class="cat" style="flex:1; padding-left:16px;">${bc}${availTag}${hiddenTag}${pricedTag} <span style="color:var(--ink-soft); font-weight:400;">${tagsText}</span></span>
       ${recheckBtn}
     </div>`;
 }
