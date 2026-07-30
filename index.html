@@ -604,6 +604,10 @@
           <input type="text" id="desc-grp-purity" autocomplete="off" placeholder="e.g. 22K">
         </div>
         <div class="field">
+          <label>Width (e.g. 8mm) — not shown on the catalogue, only used to fill in the AI Enhance {{WIDTH}} placeholder</label>
+          <input type="text" id="desc-grp-width" autocomplete="off" placeholder="e.g. 8mm">
+        </div>
+        <div class="field">
           <label>Remarks (shown for every item in this category)</label>
           <textarea id="desc-grp-remarks" rows="3" style="width:100%; padding:10px 12px; border:1.5px solid #E6DCCB; border-radius:9px; font-size:14px; font-family:'Work Sans',sans-serif;"></textarea>
         </div>
@@ -682,6 +686,7 @@
         <div class="field">
           <textarea id="aienhance-prompt" rows="6" style="width:100%; padding:10px 12px; border:1.5px solid #E6DCCB; border-radius:9px; font-size:13.5px; font-family:'Work Sans',sans-serif;"></textarea>
         </div>
+        <p class="note" style="margin-top:0;">Optional placeholders — swapped in automatically per item before generating, using its resolved Tag Manage details (tag override → group default): <b>{{NAME}}</b>, <b>{{SIZE}}</b> (only fills in if Display Size is on for that category), <b>{{WIDTH}}</b>, <b>{{REMARKS}}</b> (e.g. put "8mm wide chain" in Remarks for a specific tag). These four are the only ones offered because they're the only fields that describe how something should actually look. <b>Important:</b> these are context to help the AI understand true scale/proportion — never instructions to design or replace the piece. The uploaded photo is always the ground truth for what the jewelry actually looks like.</p>
         <button class="btn secondary" id="aienhance-save-prompt-btn" type="button">Save as Default Prompt</button>
         <button class="btn secondary" id="aienhance-reset-prompt-btn" type="button" style="margin-top:8px;">Reset to Built-in Default</button>
         <p class="link-status" id="aienhance-prompt-status"></p>
@@ -752,6 +757,9 @@
             </div>
           </div>
 
+          <p class="note" style="margin-top:12px; margin-bottom:4px; font-weight:700;">Prompt that will actually be sent for this item:</p>
+          <p class="note" style="margin-top:0; background:#F7F1E3; padding:8px 10px; border-radius:8px;" id="aienhance-resolved-prompt-preview"></p>
+
           <button class="btn" id="aienhance-generate-btn" type="button" style="margin-top:14px;">✨ Generate</button>
           <div id="aienhance-decision-row" class="aienhance-decision-row" style="display:none; margin-top:10px; gap:8px;">
             <button class="btn" id="aienhance-use-btn" type="button" style="flex:1;">✓ Use This Photo</button>
@@ -807,6 +815,10 @@
           <div class="field">
             <label>Purity (e.g. 22K, 925)</label>
             <input type="text" id="desc-tag-purity" autocomplete="off" placeholder="Leave blank to use the group's purity">
+          </div>
+          <div class="field">
+            <label>Width (e.g. 8mm) — not shown on the catalogue, only used to fill in the AI Enhance {{WIDTH}} placeholder</label>
+            <input type="text" id="desc-tag-width" autocomplete="off" placeholder="Leave blank to use the group's width">
           </div>
           <div class="field">
             <label>Remarks / description</label>
@@ -2618,6 +2630,7 @@ document.getElementById('desc-group-category-filter').addEventListener('change',
     document.getElementById('desc-category-label').value = grp.categoryLabel || '';
     document.getElementById('desc-grp-show-weight').checked = !!grp.showWeight;
     document.getElementById('desc-grp-purity').value = grp.purity || '';
+    document.getElementById('desc-grp-width').value = grp.width || '';
     document.getElementById('desc-grp-remarks').value = grp.groupRemarks || '';
     await populateGroupSizeChartDropdown(grp.sizeChartId || '');
     await populateMergeIntoDropdown(key, grp.mergeInto || '');
@@ -2716,7 +2729,7 @@ async function populateMergeIntoDropdown(excludeKey, selectedValue){
 // looking like they're still in effect.
 function applyMergeIntoFieldState(){
   const merging = !!document.getElementById('desc-grp-merge-into').value;
-  ['desc-grp-name-override', 'desc-category-label', 'desc-grp-show-weight', 'desc-grp-purity', 'desc-grp-remarks', 'desc-grp-sizechart-select', 'desc-grp-size-enabled'].forEach(id => {
+  ['desc-grp-name-override', 'desc-category-label', 'desc-grp-show-weight', 'desc-grp-purity', 'desc-grp-width', 'desc-grp-remarks', 'desc-grp-sizechart-select', 'desc-grp-size-enabled'].forEach(id => {
     document.getElementById(id).disabled = merging;
   });
   document.getElementById('desc-grp-size-options').style.pointerEvents = merging ? 'none' : 'auto';
@@ -2736,6 +2749,7 @@ document.getElementById('desc-grp-save-btn').addEventListener('click', async () 
   const categoryLabel = document.getElementById('desc-category-label').value.trim();
   const showWeight = document.getElementById('desc-grp-show-weight').checked;
   const purity = document.getElementById('desc-grp-purity').value.trim();
+  const width = document.getElementById('desc-grp-width').value.trim();
   const groupRemarks = document.getElementById('desc-grp-remarks').value.trim();
   const sizeChartId = document.getElementById('desc-grp-sizechart-select').value;
   const mergeInto = document.getElementById('desc-grp-merge-into').value;
@@ -2750,7 +2764,7 @@ document.getElementById('desc-grp-save-btn').addEventListener('click', async () 
   statusEl.textContent = 'Saving group default…';
   try {
     await update(ref(db, '/'), {
-      ['catalogue/categorySettings/' + currentGroupEditKey]: { nameOverride, categoryLabel, showWeight, purity, groupRemarks, sizeChartId, mergeInto: mergeInto || null, hidden, sizeSuffixEnabled, sizeSuffixMode, sizeSuffixCustomText }
+      ['catalogue/categorySettings/' + currentGroupEditKey]: { nameOverride, categoryLabel, showWeight, purity, width, groupRemarks, sizeChartId, mergeInto: mergeInto || null, hidden, sizeSuffixEnabled, sizeSuffixMode, sizeSuffixCustomText }
     });
     statusEl.textContent = `Saved as the default for "${label}"!`;
     setTimeout(() => { statusEl.textContent = ''; }, 3000);
@@ -2937,6 +2951,7 @@ async function loadTagOverride(tag){
     document.getElementById('desc-tag-name').placeholder = 'Currently: ' + (node.displayName || 'no name set yet');
     document.getElementById('desc-tag-show-weight').checked = (typeof node.showWeight === 'boolean') ? node.showWeight : !!grp.showWeight;
     document.getElementById('desc-tag-purity').value = node.purity || desc.purity || grp.purity || '';
+    document.getElementById('desc-tag-width').value = node.width || grp.width || '';
     document.getElementById('desc-tag-text').value = node.groupRemarks || desc.text || grp.groupRemarks || '';
     await populateTagSizeChartDropdown(node.sizeChartId || grp.sizeChartId || '');
     document.getElementById('desc-tag-scarcity-enabled').checked = desc.scarcityEnabled || false;
@@ -2991,6 +3006,7 @@ document.getElementById('desc-tag-save-btn').addEventListener('click', async () 
   const nameOverride = document.getElementById('desc-tag-name').value.trim();
   const showWeight = document.getElementById('desc-tag-show-weight').checked;
   const purity = document.getElementById('desc-tag-purity').value.trim();
+  const width = document.getElementById('desc-tag-width').value.trim();
   const groupRemarks = document.getElementById('desc-tag-text').value.trim();
   const sizeChartId = document.getElementById('desc-tag-sizechart-select').value;
   const scarcityEnabled = document.getElementById('desc-tag-scarcity-enabled').checked;
@@ -3012,6 +3028,7 @@ document.getElementById('desc-tag-save-btn').addEventListener('click', async () 
       ['catalogue/items/' + currentDescTag + '/nameOverride']: nameOverride || null,
       ['catalogue/items/' + currentDescTag + '/showWeight']: showWeight,
       ['catalogue/items/' + currentDescTag + '/purity']: purity || null,
+      ['catalogue/items/' + currentDescTag + '/width']: width || null,
       ['catalogue/items/' + currentDescTag + '/groupRemarks']: groupRemarks || null,
       ['catalogue/items/' + currentDescTag + '/sizeChartId']: sizeChartId || null,
       ['catalogue/items/' + currentDescTag + '/hidden']: hidden,
@@ -3053,6 +3070,7 @@ async function deleteTagOverride(tag){
       ['catalogue/items/' + tag + '/nameOverride']: null,
       ['catalogue/items/' + tag + '/showWeight']: null,
       ['catalogue/items/' + tag + '/purity']: null,
+      ['catalogue/items/' + tag + '/width']: null,
       ['catalogue/items/' + tag + '/groupRemarks']: null,
       ['catalogue/items/' + tag + '/sizeChartId']: null,
       ['catalogue/items/' + tag + '/scarcityEnabled']: null, // clears any legacy scarcity remnant too
@@ -3173,12 +3191,24 @@ async function deleteSizeChart(chart){
 // (catalogue/aiEnhancePrompt) so it can be changed here without ever
 // touching the Cloud Function's code again.
 const AI_ENHANCE_BUILTIN_PROMPT = "Professional macro commercial jewelry product photography. " +
-  "Place this exact piece of jewelry on a polished white marble surface with faint grey veins, " +
-  "softly lit from one side with warm natural light, creating gentle realistic shadows and a " +
-  "touch of natural sparkle on any stones or metal. Keep the jewelry itself completely unchanged: " +
-  "same design, same stones, same metal tone, same proportions, same fine details — only change " +
-  "the background and lighting around it. Square 1:1 aspect ratio, clean minimalist composition, " +
-  "no text, no watermark, no additional objects, no people, no hands.";
+  "Place this exact piece of jewelry on a soft warm-grey natural stone slab with a subtle sandy, " +
+  "mineral-flecked texture, positioned so a darker, rougher rock formation partially frames or " +
+  "overhangs the shot from one side — like jewelry resting naturally in a stone crevice outdoors. " +
+  "Soft warm directional natural light falls across the scene from one side, creating gentle " +
+  "realistic shadows and a touch of natural sparkle on any stones or metal. The overall mood is " +
+  "warm, soft, and editorial — light stone in the shot, not dark or moody overall. Keep the jewelry " +
+  "itself completely unchanged: same design, same stones, same metal tone, same proportions, same " +
+  "fine details, same exact curve and angle of any chain — only change the background and lighting " +
+  "around it. If the photo shows only a partial or cropped segment of a longer piece (such as a " +
+  "bracelet or chain cut off at the frame edge), keep it cropped exactly the same way — do not " +
+  "extend, complete, close the loop, add a clasp, or reconstruct any part of the piece that isn't " +
+  "visible in the original photo; treat the frame edges cutting off the chain as the true edge of " +
+  "the photo, not something to fill in. The uploaded photo is the ground truth for exactly what " +
+  "this piece looks like — any name, size, width, or note accompanying this prompt is supplementary " +
+  "context only (for example, to help judge true scale and proportion against a hand or wrist), " +
+  "never an instruction to design, invent, or substitute a different product than what's shown in " +
+  "the photo. Square 1:1 aspect ratio, clean minimalist composition, no text, no watermark, no " +
+  "additional objects, no people, no hands.";
 
 async function loadAiEnhancePrompt(){
   const textarea = document.getElementById('aienhance-prompt');
@@ -3214,6 +3244,7 @@ document.getElementById('aienhance-reset-prompt-btn').addEventListener('click', 
 let currentAiEnhanceBarcode = null;
 let currentAiEnhanceSourceUrl = null;
 let currentAiEnhanceResult = null; // { imageBase64, mimeType }
+let currentAiEnhanceContext = null; // { name, purity, size, category, remarks } — resolved per barcode, for prompt placeholders
 
 document.getElementById('aienhance-load-btn').addEventListener('click', loadAiEnhancePhotos);
 document.getElementById('aienhance-close-btn').addEventListener('click', () => {
@@ -3225,10 +3256,67 @@ document.getElementById('aienhance-close-btn').addEventListener('click', () => {
   currentAiEnhanceBarcode = null;
   currentAiEnhanceSourceUrl = null;
   currentAiEnhanceResult = null;
+  currentAiEnhanceContext = null;
 });
 document.getElementById('aienhance-barcode-input').addEventListener('keydown', e => {
   if (e.key === 'Enter') { e.preventDefault(); loadAiEnhancePhotos(); }
 });
+
+// Resolves the same tag-override -> group-default -> POS chain Tag Manage
+// uses, just for the handful of fields useful inside an AI Enhance prompt —
+// so a prompt can reference {{NAME}}, {{SIZE}}, {{WIDTH}}, {{REMARKS}} and get this specific
+// item's actual resolved values, not something generic.
+async function resolveAiEnhanceContext(barcode){
+  const [itemSnap, productSnap] = await Promise.all([
+    get(ref(db, 'catalogue/items/' + barcode)),
+    get(ref(db, 'jewelryData/products/' + barcode)),
+  ]);
+  const node = itemSnap.val() || {};
+  const catKey = homeCategoryKey(node.displayName || '');
+  const groupSnap = await get(ref(db, 'catalogue/categorySettings/' + catKey));
+  const grp = groupSnap.val() || {};
+
+  let size = '';
+  if (grp.sizeSuffixEnabled && !node.hideSize && node.displaySize) {
+    const mode = node.sizeSuffixMode || grp.sizeSuffixMode || 'inch';
+    const suffix = mode === 'inch' ? ' inch'
+      : mode === 'cm' ? ' cm'
+      : mode === 'custom' ? (' ' + (node.sizeSuffixCustomText || grp.sizeSuffixCustomText || '')).trimEnd()
+      : '';
+    size = node.displaySize + suffix;
+  }
+
+  return {
+    name: node.nameOverride || grp.nameOverride || node.displayName || barcode,
+    size,
+    width: node.width || grp.width || '',
+    remarks: node.groupRemarks || grp.groupRemarks || '',
+  };
+}
+
+// These four are deliberately the only ones offered — they're the only
+// fields that describe something visual (what it's called, how big, how
+// wide, any free-text note like "8mm wide"). Purity/category/etc. don't
+// change what the piece should look like, so they're left out on purpose.
+function fillPromptPlaceholders(promptText, ctx){
+  if (!ctx) return promptText;
+  return promptText
+    .replace(/\{\{NAME\}\}/g, ctx.name || '')
+    .replace(/\{\{SIZE\}\}/g, ctx.size || '')
+    .replace(/\{\{WIDTH\}\}/g, ctx.width || '')
+    .replace(/\{\{REMARKS\}\}/g, ctx.remarks || '');
+}
+
+// Keeps the "what will actually be sent" preview in sync with both the
+// currently loaded item's resolved details and whatever's typed in the
+// prompt box right now.
+function updateAiEnhancePromptPreview(){
+  const previewEl = document.getElementById('aienhance-resolved-prompt-preview');
+  if (!previewEl) return;
+  const rawPrompt = document.getElementById('aienhance-prompt').value.trim();
+  previewEl.textContent = fillPromptPlaceholders(rawPrompt, currentAiEnhanceContext);
+}
+document.getElementById('aienhance-prompt').addEventListener('input', updateAiEnhancePromptPreview);
 
 async function loadAiEnhancePhotos(){
   const input = document.getElementById('aienhance-barcode-input');
@@ -3269,6 +3357,9 @@ async function loadAiEnhancePhotos(){
       card.addEventListener('click', () => selectAiEnhanceSource(urls[Number(card.dataset.idx)]));
     });
 
+    currentAiEnhanceContext = await resolveAiEnhanceContext(barcode);
+    updateAiEnhancePromptPreview();
+
     statusEl.textContent = '';
     photosEl.style.display = 'block';
   } catch (e) {
@@ -3285,6 +3376,7 @@ function selectAiEnhanceSource(url){
   document.getElementById('aienhance-decision-row').style.display = 'none';
   document.getElementById('aienhance-generate-status').textContent = '';
   document.getElementById('aienhance-compare').style.display = 'block';
+  updateAiEnhancePromptPreview();
 }
 
 // Loads a (possibly cross-origin) image URL into a canvas — used both to
@@ -3326,7 +3418,7 @@ document.getElementById('aienhance-generate-btn').addEventListener('click', asyn
   try {
     const canvas = await loadUrlAsCanvas(currentAiEnhanceSourceUrl);
     const imageBase64 = base64FromCanvas(canvas, 'image/jpeg');
-    const prompt = document.getElementById('aienhance-prompt').value.trim();
+    const prompt = fillPromptPlaceholders(document.getElementById('aienhance-prompt').value.trim(), currentAiEnhanceContext);
 
     const response = await enhanceProductPhotoCallable({ imageBase64, mimeType: 'image/jpeg', prompt });
     const { imageBase64: resultBase64, mimeType: resultMime } = response.data || {};
@@ -3525,7 +3617,8 @@ async function processNextBatchItem(){
   try {
     const canvas = await loadUrlAsCanvas(current.photoUrl);
     const imageBase64 = base64FromCanvas(canvas, 'image/jpeg');
-    const prompt = document.getElementById('aienhance-prompt').value.trim();
+    const itemContext = await resolveAiEnhanceContext(current.barcode);
+    const prompt = fillPromptPlaceholders(document.getElementById('aienhance-prompt').value.trim(), itemContext);
     const response = await enhanceProductPhotoCallable({ imageBase64, mimeType: 'image/jpeg', prompt });
     const { imageBase64: resultBase64, mimeType: resultMime } = response.data || {};
     if (!resultBase64) throw new Error('No image came back.');
