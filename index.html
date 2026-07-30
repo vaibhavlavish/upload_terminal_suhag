@@ -57,6 +57,8 @@
     font-size:13px; color:var(--ink-soft); cursor:pointer; flex-shrink:0; line-height:1;
   }
   .close-section-btn:active{ background:#F3ECDA; }
+  .close-section-btn:disabled{ opacity:0.35; cursor:default; }
+  .close-section-btn:disabled:active{ background:none; }
   .btn{
     width:100%; border:none; border-radius:10px; padding:12px 0;
     background:var(--oxblood); color:var(--gold-soft); font-weight:700; font-size:14px;
@@ -762,8 +764,10 @@
       <div class="home-banner-list" id="allitems-list"></div>
 
       <div id="tagmanage-box" style="display:none; margin-top:24px; padding-top:20px; border-top:1.5px solid #E6DCCB;">
-        <div style="display:flex; justify-content:space-between; align-items:center;">
-          <p class="section-label" id="tagmanage-heading" style="margin:0;"></p>
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
+          <p class="section-label" id="tagmanage-heading" style="margin:0; flex:1;"></p>
+          <button class="close-section-btn" id="tagmanage-prev-btn" type="button" title="Previous item" style="font-size:16px;">←</button>
+          <button class="close-section-btn" id="tagmanage-next-btn" type="button" title="Next item" style="font-size:16px;">→</button>
           <button class="close-section-btn" id="tagmanage-close-btn" type="button" title="Close">✕</button>
         </div>
 
@@ -2790,6 +2794,8 @@ document.getElementById('tagmanage-close-btn').addEventListener('click', () => {
   currentManageBarcode = null;
   currentDescTag = null;
   currentCustomPriceTag = null;
+  tagManageOrderedList = [];
+  tagManageIndex = -1;
 });
 
 // Older saved tag descriptions are a plain string; newer ones are an object.
@@ -3540,7 +3546,36 @@ async function dismissVerification(bc){
 // — the single entry point into what used to be three separate places
 // (All Items, Manage, and Tag-Specific, which used to live in what's now
 // the Group Defaults tab).
-function openTagManageBox(bc){
+let tagManageOrderedList = [];
+let tagManageIndex = -1;
+
+// Same grouping the list uses (by item name), just flattened and sorted
+// name-then-barcode for a stable, predictable Prev/Next order — the visual
+// list's within-group order isn't guaranteed sorted, but that's never
+// visible to Prev/Next, only that moving through it is consistent.
+function computeTagManageOrderedList(){
+  const items = allItemsCache.items || {};
+  return Object.keys(items)
+    .filter(bc => items[bc] && typeof items[bc] === 'object')
+    .filter(bc => getFirstPhotoUrl(items[bc]))
+    .map(bc => ({ bc, name: items[bc].displayName || bc }))
+    .sort((a, b) => a.name.localeCompare(b.name) || a.bc.localeCompare(b.bc))
+    .map(r => r.bc);
+}
+
+function updateTagManageNavButtons(){
+  document.getElementById('tagmanage-prev-btn').disabled = tagManageIndex <= 0;
+  document.getElementById('tagmanage-next-btn').disabled = tagManageIndex === -1 || tagManageIndex >= tagManageOrderedList.length - 1;
+}
+
+document.getElementById('tagmanage-prev-btn').addEventListener('click', () => {
+  if (tagManageIndex > 0) openTagManageBox(tagManageOrderedList[tagManageIndex - 1]);
+});
+document.getElementById('tagmanage-next-btn').addEventListener('click', () => {
+  if (tagManageIndex >= 0 && tagManageIndex < tagManageOrderedList.length - 1) openTagManageBox(tagManageOrderedList[tagManageIndex + 1]);
+});
+
+async function openTagManageBox(bc){
   switchTab('tagmanage');
   document.getElementById('tagmanage-box').style.display = 'block';
   document.getElementById('tagmanage-heading').textContent = 'Managing: ' + bc;
@@ -3548,6 +3583,14 @@ function openTagManageBox(bc){
   loadTagOverride(bc);
   loadCustomPrice(bc);
   document.getElementById('tagmanage-box').scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  // Refreshed (not just reused) every time, so Prev/Next reflects the
+  // current catalogue even the very first time this opens — e.g. jumping in
+  // from the Reverify tab, before the grouped list behind it has ever loaded.
+  await loadAllItemsOverview();
+  tagManageOrderedList = computeTagManageOrderedList();
+  tagManageIndex = tagManageOrderedList.indexOf(bc);
+  updateTagManageNavButtons();
 }
 
 // ---------- Custom Categories: manually curated collections, independent of item names ----------
