@@ -613,6 +613,20 @@
             <option value="">No size chart linked</option>
           </select>
         </div>
+        <div class="field" style="display:flex; align-items:center; gap:8px;">
+          <input type="checkbox" id="desc-grp-size-enabled" style="width:auto;">
+          <label for="desc-grp-size-enabled" style="margin:0;">Display Size (adds a unit after the size shown on the catalogue, e.g. "8 inch")</label>
+        </div>
+        <div id="desc-grp-size-options" style="display:none;">
+          <div class="toggle-row" style="margin:8px 0 10px;">
+            <div class="tab-btn active" id="desc-grp-size-mode-inch" style="font-size:12.5px; padding:8px 0;">Inch</div>
+            <div class="tab-btn" id="desc-grp-size-mode-cm" style="font-size:12.5px; padding:8px 0;">CM</div>
+            <div class="tab-btn" id="desc-grp-size-mode-custom" style="font-size:12.5px; padding:8px 0;">Custom</div>
+          </div>
+          <div id="desc-grp-size-custom-field" style="display:none;">
+            <input type="text" id="desc-grp-size-custom-text" autocomplete="off" placeholder="e.g. mm, ft, free size…">
+          </div>
+        </div>
         <div class="field">
           <label>Merge into another category (optional)</label>
           <select id="desc-grp-merge-into">
@@ -803,6 +817,21 @@
             <select id="desc-tag-sizechart-select">
               <option value="">No size chart linked</option>
             </select>
+          </div>
+          <div id="desc-tag-size-section" style="display:none;">
+            <p class="note" style="margin-top:14px; margin-bottom:6px; font-weight:700;">Display Size</p>
+            <div class="toggle-row" style="margin:0 0 10px;">
+              <div class="tab-btn" id="desc-tag-size-mode-inch" style="font-size:12.5px; padding:8px 0;">Inch</div>
+              <div class="tab-btn" id="desc-tag-size-mode-cm" style="font-size:12.5px; padding:8px 0;">CM</div>
+              <div class="tab-btn" id="desc-tag-size-mode-custom" style="font-size:12.5px; padding:8px 0;">Custom</div>
+            </div>
+            <div id="desc-tag-size-custom-field" style="display:none;">
+              <input type="text" id="desc-tag-size-custom-text" autocomplete="off" placeholder="e.g. mm, ft, free size…">
+            </div>
+            <div class="field" style="display:flex; align-items:center; gap:8px; margin-top:10px;">
+              <input type="checkbox" id="desc-tag-size-hide" style="width:auto;">
+              <label for="desc-tag-size-hide" style="margin:0;">Hide size for this tag (even though the group shows it)</label>
+            </div>
           </div>
           <div class="field" style="display:flex; align-items:center; gap:8px; margin-top:14px;">
             <input type="checkbox" id="desc-tag-scarcity-enabled" style="width:auto;">
@@ -2593,6 +2622,11 @@ document.getElementById('desc-group-category-filter').addEventListener('change',
     await populateGroupSizeChartDropdown(grp.sizeChartId || '');
     await populateMergeIntoDropdown(key, grp.mergeInto || '');
     document.getElementById('desc-grp-hidden').checked = !!grp.hidden;
+    document.getElementById('desc-grp-size-enabled').checked = !!grp.sizeSuffixEnabled;
+    document.getElementById('desc-grp-size-options').style.display = grp.sizeSuffixEnabled ? 'block' : 'none';
+    setSizeModeButtons('desc-grp-size-mode-', grp.sizeSuffixMode || 'inch');
+    document.getElementById('desc-grp-size-custom-field').style.display = grp.sizeSuffixMode === 'custom' ? 'block' : 'none';
+    document.getElementById('desc-grp-size-custom-text').value = grp.sizeSuffixCustomText || '';
     applyMergeIntoFieldState();
     if (myToken !== groupEditRequestToken) return; // check again — populateGroupSizeChartDropdown/populateMergeIntoDropdown are also async
 
@@ -2605,6 +2639,34 @@ document.getElementById('desc-group-category-filter').addEventListener('change',
     console.error(e);
     statusEl.textContent = 'Could not load category — try again.';
   }
+});
+
+// Shared by both the Group Defaults and Tag-Specific "Display Size" controls
+// — a 3-way segmented choice (Inch / CM / Custom) rather than a dropdown,
+// matching the same toggle-row pattern used elsewhere (e.g. the Home Page
+// banner's link-type picker).
+function setSizeModeButtons(prefix, mode){
+  ['inch', 'cm', 'custom'].forEach(m => {
+    document.getElementById(prefix + m).classList.toggle('active', m === mode);
+  });
+}
+function wireSizeModeButtons(prefix, customFieldId, onChange){
+  ['inch', 'cm', 'custom'].forEach(m => {
+    document.getElementById(prefix + m).addEventListener('click', () => {
+      setSizeModeButtons(prefix, m);
+      document.getElementById(customFieldId).style.display = m === 'custom' ? 'block' : 'none';
+      if (onChange) onChange();
+    });
+  });
+}
+function getSizeMode(prefix){
+  return ['inch', 'cm', 'custom'].find(m => document.getElementById(prefix + m).classList.contains('active')) || 'inch';
+}
+
+wireSizeModeButtons('desc-grp-size-mode-', 'desc-grp-size-custom-field');
+document.getElementById('desc-grp-size-enabled').addEventListener('change', () => {
+  document.getElementById('desc-grp-size-options').style.display =
+    document.getElementById('desc-grp-size-enabled').checked ? 'block' : 'none';
 });
 
 async function populateGroupSizeChartDropdown(selectedId){
@@ -2654,9 +2716,11 @@ async function populateMergeIntoDropdown(excludeKey, selectedValue){
 // looking like they're still in effect.
 function applyMergeIntoFieldState(){
   const merging = !!document.getElementById('desc-grp-merge-into').value;
-  ['desc-grp-name-override', 'desc-category-label', 'desc-grp-show-weight', 'desc-grp-purity', 'desc-grp-remarks', 'desc-grp-sizechart-select'].forEach(id => {
+  ['desc-grp-name-override', 'desc-category-label', 'desc-grp-show-weight', 'desc-grp-purity', 'desc-grp-remarks', 'desc-grp-sizechart-select', 'desc-grp-size-enabled'].forEach(id => {
     document.getElementById(id).disabled = merging;
   });
+  document.getElementById('desc-grp-size-options').style.pointerEvents = merging ? 'none' : 'auto';
+  document.getElementById('desc-grp-size-options').style.opacity = merging ? '0.5' : '1';
 }
 document.getElementById('desc-grp-merge-into').addEventListener('change', applyMergeIntoFieldState);
 
@@ -2676,6 +2740,9 @@ document.getElementById('desc-grp-save-btn').addEventListener('click', async () 
   const sizeChartId = document.getElementById('desc-grp-sizechart-select').value;
   const mergeInto = document.getElementById('desc-grp-merge-into').value;
   const hidden = document.getElementById('desc-grp-hidden').checked;
+  const sizeSuffixEnabled = document.getElementById('desc-grp-size-enabled').checked;
+  const sizeSuffixMode = getSizeMode('desc-grp-size-mode-');
+  const sizeSuffixCustomText = document.getElementById('desc-grp-size-custom-text').value.trim();
   const label = homeCategoryLabel(currentGroupEditKey);
 
   if (!confirm(`Set this as the default for every item in "${label}" (currently ${currentGroupEditCount} item(s), and any added later)? Items with their own Tag-Specific entry will keep using their own value instead. Proceed?`)) return;
@@ -2683,7 +2750,7 @@ document.getElementById('desc-grp-save-btn').addEventListener('click', async () 
   statusEl.textContent = 'Saving group default…';
   try {
     await update(ref(db, '/'), {
-      ['catalogue/categorySettings/' + currentGroupEditKey]: { nameOverride, categoryLabel, showWeight, purity, groupRemarks, sizeChartId, mergeInto: mergeInto || null, hidden }
+      ['catalogue/categorySettings/' + currentGroupEditKey]: { nameOverride, categoryLabel, showWeight, purity, groupRemarks, sizeChartId, mergeInto: mergeInto || null, hidden, sizeSuffixEnabled, sizeSuffixMode, sizeSuffixCustomText }
     });
     statusEl.textContent = `Saved as the default for "${label}"!`;
     setTimeout(() => { statusEl.textContent = ''; }, 3000);
@@ -2766,6 +2833,7 @@ document.getElementById('desc-tag-scarcity-enabled').addEventListener('change', 
   document.getElementById('desc-tag-scarcity-field').style.display =
     document.getElementById('desc-tag-scarcity-enabled').checked ? 'block' : 'none';
 });
+wireSizeModeButtons('desc-tag-size-mode-', 'desc-tag-size-custom-field');
 // Once fully hidden, "hide from home category only" is moot — grey it out
 // instead of leaving two switches that could look like they disagree.
 document.getElementById('desc-tag-hidden').addEventListener('change', () => {
@@ -2878,6 +2946,20 @@ async function loadTagOverride(tag){
     document.getElementById('desc-tag-hide-home').checked = !!node.hideFromHomeCategory;
     document.getElementById('desc-tag-hide-home').disabled = !!node.hidden;
     document.getElementById('desc-tag-hide-home-field').style.opacity = node.hidden ? '0.5' : '1';
+
+    // Only shown at all if the group has "Display Size" turned on — there's
+    // nothing useful to override here otherwise.
+    const sizeSection = document.getElementById('desc-tag-size-section');
+    if (grp.sizeSuffixEnabled) {
+      const mode = node.sizeSuffixMode || grp.sizeSuffixMode || 'inch';
+      setSizeModeButtons('desc-tag-size-mode-', mode);
+      document.getElementById('desc-tag-size-custom-field').style.display = mode === 'custom' ? 'block' : 'none';
+      document.getElementById('desc-tag-size-custom-text').value = node.sizeSuffixCustomText || grp.sizeSuffixCustomText || '';
+      document.getElementById('desc-tag-size-hide').checked = !!node.hideSize;
+      sizeSection.style.display = 'block';
+    } else {
+      sizeSection.style.display = 'none';
+    }
     if (myToken !== tagEditRequestToken) return;
 
     // Reference line: shows where the pre-filled values above came from —
@@ -2915,6 +2997,10 @@ document.getElementById('desc-tag-save-btn').addEventListener('click', async () 
   const scarcityCount = scarcityEnabled ? (parseInt(document.getElementById('desc-tag-scarcity-count').value) || 0) : null;
   const hidden = document.getElementById('desc-tag-hidden').checked;
   const hideFromHomeCategory = document.getElementById('desc-tag-hide-home').checked;
+  const sizeSectionActive = document.getElementById('desc-tag-size-section').style.display !== 'none';
+  const sizeSuffixMode = sizeSectionActive ? getSizeMode('desc-tag-size-mode-') : null;
+  const sizeSuffixCustomText = sizeSectionActive ? document.getElementById('desc-tag-size-custom-text').value.trim() : null;
+  const hideSize = sizeSectionActive ? document.getElementById('desc-tag-size-hide').checked : false;
 
   statusEl.textContent = 'Saving…';
   try {
@@ -2930,6 +3016,9 @@ document.getElementById('desc-tag-save-btn').addEventListener('click', async () 
       ['catalogue/items/' + currentDescTag + '/sizeChartId']: sizeChartId || null,
       ['catalogue/items/' + currentDescTag + '/hidden']: hidden,
       ['catalogue/items/' + currentDescTag + '/hideFromHomeCategory']: hideFromHomeCategory,
+      ['catalogue/items/' + currentDescTag + '/sizeSuffixMode']: sizeSuffixMode,
+      ['catalogue/items/' + currentDescTag + '/sizeSuffixCustomText']: sizeSuffixCustomText,
+      ['catalogue/items/' + currentDescTag + '/hideSize']: hideSize,
       // tagDescriptions is retired down to scarcity-only — clears any old
       // text/purity/weight/name that used to live here too, so there's a
       // single source of truth for everything except the badge.
@@ -2968,6 +3057,12 @@ async function deleteTagOverride(tag){
       ['catalogue/items/' + tag + '/sizeChartId']: null,
       ['catalogue/items/' + tag + '/scarcityEnabled']: null, // clears any legacy scarcity remnant too
       ['catalogue/items/' + tag + '/scarcityCount']: null,
+      ['catalogue/items/' + tag + '/sizeSuffixMode']: null,
+      ['catalogue/items/' + tag + '/sizeSuffixCustomText']: null,
+      // Note: hideSize is deliberately left untouched here — same reasoning
+      // as hidden/hideFromHomeCategory below, it's a moderation decision,
+      // not an override value, so clearing the override can't accidentally
+      // reveal a size that was hidden on purpose.
       ['catalogue/tagDescriptions/' + tag]: null,
     });
     if (currentDescTag === tag) loadTagOverride(tag); // refresh the open form to show the cleared/inherited state
