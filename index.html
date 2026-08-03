@@ -797,6 +797,7 @@
           <button class="close-section-btn" id="tagmanage-next-btn" type="button" title="Next item" style="font-size:16px;">→</button>
           <button class="close-section-btn" id="tagmanage-close-btn" type="button" title="Close">✕</button>
         </div>
+        <p class="note" style="margin-top:2px;" id="tagmanage-views"></p>
 
         <p class="section-label" style="margin-top:14px;">Photos</p>
         <p class="manage-status" id="manage-status"></p>
@@ -2885,6 +2886,7 @@ document.getElementById('tagmanage-close-btn').addEventListener('click', () => {
   document.getElementById('desc-tag-reference').textContent = '';
   document.getElementById('cprice-fields').style.display = 'none';
   document.getElementById('cprice-status').textContent = '';
+  document.getElementById('tagmanage-views').textContent = '';
   currentManageBarcode = null;
   currentDescTag = null;
   currentCustomPriceTag = null;
@@ -3795,6 +3797,14 @@ async function openTagManageBox(bc){
   tagManageOrderedList = computeTagManageOrderedList();
   tagManageIndex = tagManageOrderedList.indexOf(bc);
   updateTagManageNavButtons();
+
+  // Unique visitor count for this exact tag — recorded by the catalogue
+  // itself (once per visitor, per tag), never shown to customers, purely
+  // for your own sense of what's actually getting attention.
+  const viewCount = Number(allItemsCache.views && allItemsCache.views[bc]) || 0;
+  document.getElementById('tagmanage-views').textContent = viewCount > 0
+    ? `👁 ${viewCount} unique visitor${viewCount === 1 ? '' : 's'} have opened this item`
+    : 'No recorded views yet for this item';
 }
 
 // ---------- Custom Categories: manually curated collections, independent of item names ----------
@@ -4095,18 +4105,20 @@ document.getElementById('cprice-remove-btn').addEventListener('click', async () 
 });
 
 // ---------- All Items: a full group-wise overview of every barcode and its linked tags ----------
-let allItemsCache = { items: {}, priceOverrides: {} };
+let allItemsCache = { items: {}, priceOverrides: {}, views: {} };
 
 async function loadAllItemsOverview(){
   const statusEl = document.getElementById('allitems-status');
   statusEl.textContent = 'Loading…';
   try {
-    const [itemsSnap, priceSnap] = await Promise.all([
+    const [itemsSnap, priceSnap, viewsSnap] = await Promise.all([
       get(ref(db, 'catalogue/items')),
       get(ref(db, 'catalogue/tagMakingOverrides')),
+      get(ref(db, 'catalogue/itemViews')),
     ]);
     allItemsCache.items = itemsSnap.val() || {};
     allItemsCache.priceOverrides = priceSnap.val() || {};
+    allItemsCache.views = viewsSnap.val() || {};
     statusEl.textContent = '';
     renderAllItemsList();
   } catch (e) {
@@ -4124,6 +4136,10 @@ function renderItemSubRow(bc, node, tags){
   const hiddenTag = node.hidden ? ' <span style="color:#B5442E;">(hidden)</span>' : '';
   const hasPriceOverride = tags.some(t => allItemsCache.priceOverrides && allItemsCache.priceOverrides[t]);
   const pricedTag = hasPriceOverride ? ' <span style="color:#2E7D32;">(priced)</span>' : '';
+  // Views are tracked per exact tag, so a linked set's total is the sum of
+  // however many unique visitors opened any of its tags.
+  const viewCount = tags.reduce((sum, t) => sum + (Number(allItemsCache.views && allItemsCache.views[t]) || 0), 0);
+  const viewsTag = viewCount > 0 ? ` <span style="color:var(--ink-soft);">👁 ${viewCount}</span>` : '';
   const tagsText = tags.length > 1 ? tags.join(', ') : tags[0] + ' (unlinked)';
   // "Sold out" here only reflects this catalogue entry's own `available`
   // flag, which the POS updates after a sale/return/rate-change/import — a
@@ -4132,7 +4148,7 @@ function renderItemSubRow(bc, node, tags){
   const recheckBtn = isSoldOut ? `<button class="manage-del-btn recheck-avail-btn" data-bc="${bc}" title="Recheck stock and fix if it's actually in stock">↻</button>` : '';
   return `
     <div class="home-banner-row existing-row-clickable" data-bc="${bc}">
-      <span class="cat" style="flex:1; padding-left:16px;">${bc}${availTag}${hiddenTag}${pricedTag} <span style="color:var(--ink-soft); font-weight:400;">${tagsText}</span></span>
+      <span class="cat" style="flex:1; padding-left:16px;">${bc}${availTag}${hiddenTag}${pricedTag}${viewsTag} <span style="color:var(--ink-soft); font-weight:400;">${tagsText}</span></span>
       ${recheckBtn}
     </div>`;
 }
