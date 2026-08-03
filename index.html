@@ -734,6 +734,7 @@
           </div>
           <div style="display:flex; gap:8px; margin-top:14px;">
             <button class="btn" id="aienhance-batch-use-btn" type="button" style="flex:1;">✓ Use This Photo</button>
+            <button class="btn secondary" id="aienhance-batch-regenerate-btn" type="button" style="flex:1;">🔄 Regenerate</button>
             <button class="btn secondary" id="aienhance-batch-discard-btn" type="button" style="flex:1;">✗ Discard, Next</button>
           </div>
           <p class="link-status" id="aienhance-batch-review-status"></p>
@@ -3729,6 +3730,14 @@ document.getElementById('aienhance-batch-use-btn').addEventListener('click', asy
 document.getElementById('aienhance-batch-discard-btn').addEventListener('click', () => {
   aiEnhanceBatchCurrentResult = null;
   aiEnhanceBatchIndex++;
+  processNextBatchItem();
+});
+
+// Same index as the current item — re-runs generation for it instead of
+// advancing the queue, so one unsatisfying result doesn't force a choice
+// between keeping it or losing the item entirely for this batch run.
+document.getElementById('aienhance-batch-regenerate-btn').addEventListener('click', () => {
+  aiEnhanceBatchCurrentResult = null;
   processNextBatchItem();
 });
 
