@@ -338,6 +338,11 @@
             <button class="btn secondary" id="rescan-btn">↺ Change Barcode</button>
             <button class="btn" id="shoot-btn">📸 Capture &amp; Upload</button>
           </div>
+          <div class="scan-actions" style="margin-top:8px;">
+            <button class="btn secondary" id="scan-pick-file-btn" type="button">🖼 Choose Photo From Device</button>
+          </div>
+          <input type="file" id="scan-file-input" accept="image/*" style="display:none;">
+          <p class="link-status" id="scan-file-status"></p>
         </div>
       </div>
 
@@ -346,7 +351,7 @@
         <div id="recent-rows"></div>
       </div>
 
-      <p class="note">Enter the barcode first (typing or your hardware scanner) —<br>we confirm it's in stock, then the camera opens.</p>
+      <p class="note">Enter the barcode first (typing or your hardware scanner) —<br>we confirm it's in stock, then the camera opens (or choose an existing photo from this device instead — no need to rename the file first, it's attached to whichever barcode you entered).</p>
     </div>
 
     <!-- BULK / EXISTING PHOTOS TAB -->
@@ -1381,6 +1386,43 @@ async function captureAndUpload(){
   btn.disabled = false; btn.textContent = '📸 Capture & Upload';
   showBarcodeForm(); // camera stays on — ready for the next barcode immediately
 }
+
+// Lets a photo already sitting on the device (any filename — it's the
+// confirmed barcode above that decides where it's attached, not the file
+// name) be attached the same way a live camera capture would be — same
+// upload pipeline, same compression, same "just uploaded" row afterward.
+document.getElementById('scan-pick-file-btn').addEventListener('click', () => {
+  document.getElementById('scan-file-input').click();
+});
+document.getElementById('scan-file-input').addEventListener('change', async e => {
+  const file = e.target.files[0];
+  e.target.value = ''; // reset so picking the exact same file again still fires 'change'
+  if (!file || !confirmedBarcode) return;
+  const barcode = confirmedBarcode;
+  const btn = document.getElementById('scan-pick-file-btn');
+  const statusEl = document.getElementById('scan-file-status');
+  btn.disabled = true; btn.textContent = 'Uploading…';
+  statusEl.textContent = '';
+  try {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    await new Promise((resolve, reject) => {
+      img.onload = resolve;
+      img.onerror = () => reject(new Error('Could not read that image'));
+      img.src = url;
+    });
+    const canvas = resizedCanvasFromImg(img, 1600);
+    URL.revokeObjectURL(url);
+    const imageRef = await uploadForBarcode(barcode, canvas);
+    addRecentRow(barcode, true, imageRef);
+  } catch (err) {
+    console.error(err);
+    addRecentRow(barcode, false, null);
+    statusEl.textContent = 'Could not upload that photo — try again.';
+  }
+  btn.disabled = false; btn.textContent = '🖼 Choose Photo From Device';
+  if (!statusEl.textContent) showBarcodeForm(); // only reset on success — keep the button/status visible if it failed, so they can retry
+});
 
 // ---------- Bulk / existing photos (unchanged from before) ----------
 let queue = [];
