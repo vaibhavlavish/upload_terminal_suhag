@@ -1233,10 +1233,6 @@ async function compressCanvasToTarget(canvas, targetBytes){
   return blob;
 }
 
-function compressCanvasToBlob(canvas){
-  return compressCanvasToTarget(canvas);
-}
-
 function resizedCanvasFromCanvas(sourceCanvas, maxW){
   const scale = Math.min(1, maxW / sourceCanvas.width);
   const canvas = document.createElement('canvas');
@@ -2236,6 +2232,7 @@ document.getElementById('home-add-btn').addEventListener('click', async () => {
   if (!file) { statusEl.textContent = 'Choose an image first.'; return; }
 
   let categoryKey = 'all', itemBarcode = null;
+  let itemIsHidden = false;
   if (homeLinkType === 'item') {
     itemBarcode = document.getElementById('home-item-barcode-input').value.trim().toUpperCase();
     if (!itemBarcode) { statusEl.textContent = 'Enter the item\'s barcode.'; return; }
@@ -2243,7 +2240,9 @@ document.getElementById('home-add-btn').addEventListener('click', async () => {
     // banner to it — otherwise tapping the banner would lead nowhere.
     try {
       const snap = await get(ref(db, 'catalogue/items/' + itemBarcode));
-      if (!snap.val()) { statusEl.textContent = 'No photos found for ' + itemBarcode + ' — upload &amp; link it first.'; return; }
+      const node = snap.val();
+      if (!node) { statusEl.textContent = 'No photos found for ' + itemBarcode + ' — upload &amp; link it first.'; return; }
+      itemIsHidden = !!node.hidden;
     } catch (e) {
       console.error(e);
       statusEl.textContent = 'Could not verify that barcode — try again.';
@@ -2276,6 +2275,9 @@ document.getElementById('home-add-btn').addEventListener('click', async () => {
     document.getElementById('home-banner-pick-btn').textContent = 'Choose Photo';
     document.getElementById('home-item-barcode-input').value = '';
     loadHomeBanners();
+    if (itemIsHidden) {
+      statusEl.textContent = `Saved — but ${itemBarcode} is currently Hidden, so this banner won't lead anywhere until you un-hide it in Tag Manage.`;
+    }
   } catch (e) {
     console.error(e);
     statusEl.textContent = 'Upload failed — try again.';
@@ -2446,6 +2448,7 @@ document.getElementById('reel-add-btn').addEventListener('click', async () => {
   if (!file && !videoFile) { statusEl.textContent = 'Add a thumbnail image, a video, or both.'; return; }
 
   let categoryKey = null, itemBarcode = null;
+  let itemIsHidden = false;
   if (reelLinkType === 'item') {
     itemBarcode = document.getElementById('reel-item-barcode-input').value.trim().toUpperCase();
     if (!itemBarcode) { statusEl.textContent = 'Enter the item\'s barcode.'; return; }
@@ -2453,7 +2456,9 @@ document.getElementById('reel-add-btn').addEventListener('click', async () => {
     // photos before tagging a Reel to it, so tapping it never leads nowhere.
     try {
       const snap = await get(ref(db, 'catalogue/items/' + itemBarcode));
-      if (!snap.val()) { statusEl.textContent = 'No photos found for ' + itemBarcode + ' — upload &amp; link it first.'; return; }
+      const node = snap.val();
+      if (!node) { statusEl.textContent = 'No photos found for ' + itemBarcode + ' — upload &amp; link it first.'; return; }
+      itemIsHidden = !!node.hidden;
     } catch (e) {
       console.error(e);
       statusEl.textContent = 'Could not verify that barcode — try again.';
@@ -2502,6 +2507,9 @@ document.getElementById('reel-add-btn').addEventListener('click', async () => {
     document.getElementById('reel-video-pick-btn').textContent = 'Choose Video';
     document.getElementById('reel-item-barcode-input').value = '';
     loadReels();
+    if (itemIsHidden) {
+      statusEl.textContent = `Saved — but ${itemBarcode} is currently Hidden, so this reel won't lead anywhere until you un-hide it in Tag Manage.`;
+    }
   } catch (e) {
     console.error(e);
     statusEl.textContent = 'Upload failed — try again.';
@@ -4009,13 +4017,19 @@ async function addBarcodeToCustomCategory(id){
     // barcode to something — confirms it actually has photos in the
     // catalogue first, so adding it here can never point at nothing.
     const snap = await get(ref(db, 'catalogue/items/' + barcode));
-    if (!snap.val()) {
+    const node = snap.val();
+    if (!node) {
       statusEl.textContent = 'No photos found for ' + barcode + ' — upload & link it first.';
       return;
     }
     await update(ref(db, '/'), { ['catalogue/customCategories/' + id + '/barcodes/' + barcode]: true });
     input.value = '';
-    statusEl.textContent = '';
+    // Hidden is a complete kill switch — added here or not, it stays
+    // invisible everywhere until un-hidden, so this is worth flagging
+    // rather than silently succeeding with no visible effect.
+    statusEl.textContent = node.hidden
+      ? `Added — but ${barcode} is currently Hidden, so it won't actually show here until you un-hide it in Tag Manage.`
+      : '';
     loadCustomCategories();
   } catch (e) {
     console.error(e);
@@ -4147,20 +4161,22 @@ document.getElementById('cprice-remove-btn').addEventListener('click', async () 
 });
 
 // ---------- All Items: a full group-wise overview of every barcode and its linked tags ----------
-let allItemsCache = { items: {}, priceOverrides: {}, views: {} };
+let allItemsCache = { items: {}, priceOverrides: {}, views: {}, categorySettings: {} };
 
 async function loadAllItemsOverview(){
   const statusEl = document.getElementById('allitems-status');
   statusEl.textContent = 'Loading…';
   try {
-    const [itemsSnap, priceSnap, viewsSnap] = await Promise.all([
+    const [itemsSnap, priceSnap, viewsSnap, categorySnap] = await Promise.all([
       get(ref(db, 'catalogue/items')),
       get(ref(db, 'catalogue/tagMakingOverrides')),
       get(ref(db, 'catalogue/itemViews')),
+      get(ref(db, 'catalogue/categorySettings')),
     ]);
     allItemsCache.items = itemsSnap.val() || {};
     allItemsCache.priceOverrides = priceSnap.val() || {};
     allItemsCache.views = viewsSnap.val() || {};
+    allItemsCache.categorySettings = categorySnap.val() || {};
     statusEl.textContent = '';
     renderAllItemsList();
   } catch (e) {
@@ -4175,7 +4191,13 @@ async function loadAllItemsOverview(){
 function renderItemSubRow(bc, node, tags){
   const isSoldOut = !node.available;
   const availTag = isSoldOut ? ' <span style="color:#B5442E;">(sold out)</span>' : '';
-  const hiddenTag = node.hidden ? ' <span style="color:#B5442E;">(hidden)</span>' : '';
+  // Reflects BOTH ways an item can end up invisible on the storefront — its
+  // own hidden flag, or its whole category being hidden in Group Defaults —
+  // so a row never looks deceptively normal while actually being suppressed.
+  const catKey = homeCategoryKey(node.displayName || '');
+  const catHidden = !!(allItemsCache.categorySettings && allItemsCache.categorySettings[catKey] && allItemsCache.categorySettings[catKey].hidden);
+  const hiddenTag = node.hidden ? ' <span style="color:#B5442E;">(hidden)</span>'
+    : catHidden ? ' <span style="color:#B5442E;">(category hidden)</span>' : '';
   const hasPriceOverride = tags.some(t => allItemsCache.priceOverrides && allItemsCache.priceOverrides[t]);
   const pricedTag = hasPriceOverride ? ' <span style="color:#2E7D32;">(priced)</span>' : '';
   // Views are tracked per exact tag, so a linked set's total is the sum of
