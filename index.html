@@ -387,9 +387,6 @@
       </div>
       <p class="link-status" id="link-status"></p>
 
-      <p class="section-label" id="link-existing-label" style="display:none; margin-top:4px;">Already Linked Groups</p>
-      <div class="home-banner-list" id="link-existing-list"></div>
-
       <div class="link-group" id="link-group">
         <div class="link-preview">
           <div class="thumb" id="link-thumb"></div>
@@ -429,6 +426,9 @@
           </div>
         </div>
       </div>
+
+      <p class="section-label" id="link-existing-label" style="display:none; margin-top:4px;">Already Linked Groups</p>
+      <div class="home-banner-list" id="link-existing-list"></div>
 
       <p class="note">Use this when several identical-looking pieces (same design, different tags) share one photo set. Add each tag in the order you'd like it sold first — the top tag still in stock is the one shown &amp; quoted on the catalogue; once it sells, the next one in the list takes over automatically.</p>
     </div>
@@ -1705,9 +1705,16 @@ async function loadExistingLinkedGroups(){
       return;
     }
     labelEl.style.display = 'block';
-    listEl.innerHTML = bcs.sort().map(bc => `
+    // Grouped by category first (so same-style groups cluster together),
+    // then by barcode within a category.
+    const rows = bcs.map(bc => ({
+      bc,
+      catLabel: homeCategoryLabel(homeCategoryKey(val[bc].displayName || '')),
+    })).sort((a, b) => a.catLabel.localeCompare(b.catLabel) || a.bc.localeCompare(b.bc));
+
+    listEl.innerHTML = rows.map(({ bc, catLabel }) => `
       <div class="home-banner-row existing-row-clickable" data-bc="${bc}">
-        <span class="cat" style="flex:1;">${bc}</span>
+        <span class="cat" style="flex:1;">${bc} <span style="color:var(--ink-soft); font-weight:400;">— ${catLabel}</span></span>
         <p class="review-row-text" style="max-width:220px;">${val[bc].linkedBarcodes.join(', ')}</p>
       </div>
     `).join('');
