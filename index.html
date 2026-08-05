@@ -1705,19 +1705,45 @@ async function loadExistingLinkedGroups(){
       return;
     }
     labelEl.style.display = 'block';
-    // Grouped by category first (so same-style groups cluster together),
-    // then by barcode within a category.
-    const rows = bcs.map(bc => ({
-      bc,
-      catLabel: homeCategoryLabel(homeCategoryKey(val[bc].displayName || '')),
-    })).sort((a, b) => a.catLabel.localeCompare(b.catLabel) || a.bc.localeCompare(b.bc));
 
-    listEl.innerHTML = rows.map(({ bc, catLabel }) => `
-      <div class="home-banner-row existing-row-clickable" data-bc="${bc}">
-        <span class="cat" style="flex:1;">${bc} <span style="color:var(--ink-soft); font-weight:400;">— ${catLabel}</span></span>
-        <p class="review-row-text" style="max-width:220px;">${val[bc].linkedBarcodes.join(', ')}</p>
-      </div>
-    `).join('');
+    // Grouped by category, collapsed by default — same expand/expand-on-tap
+    // pattern as the Tag Manage list, so a shop with many linked groups
+    // isn't scrolling a long flat list to find one.
+    const groups = {};
+    bcs.forEach(bc => {
+      const catLabel = homeCategoryLabel(homeCategoryKey(val[bc].displayName || ''));
+      (groups[catLabel] = groups[catLabel] || []).push(bc);
+    });
+    const catLabels = Object.keys(groups).sort((a, b) => a.localeCompare(b));
+
+    listEl.innerHTML = catLabels.map(catLabel => {
+      const groupBcs = groups[catLabel].sort();
+      return `
+        <div class="link-cat-group">
+          <div class="home-banner-row link-cat-header" data-cat="${catLabel.replace(/"/g,'&quot;')}" style="cursor:pointer;">
+            <span class="cat" style="flex:1;">${catLabel} <span style="color:var(--ink-soft); font-weight:400;">— ${groupBcs.length} group${groupBcs.length === 1 ? '' : 's'}</span></span>
+            <span class="link-cat-chevron">▸</span>
+          </div>
+          <div class="link-cat-body" style="display:none;">
+            ${groupBcs.map(bc => `
+              <div class="home-banner-row existing-row-clickable" data-bc="${bc}">
+                <span class="cat" style="flex:1; padding-left:16px;">${bc}</span>
+                <p class="review-row-text" style="max-width:220px;">${val[bc].linkedBarcodes.join(', ')}</p>
+              </div>
+            `).join('')}
+          </div>
+        </div>`;
+    }).join('');
+
+    listEl.querySelectorAll('.link-cat-header').forEach(header => {
+      header.addEventListener('click', () => {
+        const body = header.nextElementSibling;
+        const chevron = header.querySelector('.link-cat-chevron');
+        const isOpen = body.style.display !== 'none';
+        body.style.display = isOpen ? 'none' : 'block';
+        chevron.textContent = isOpen ? '▸' : '▾';
+      });
+    });
     listEl.querySelectorAll('.existing-row-clickable').forEach(row => {
       row.addEventListener('click', () => {
         document.getElementById('link-barcode-input').value = row.dataset.bc;
