@@ -622,6 +622,11 @@
           <textarea id="desc-grp-remarks" rows="3" style="width:100%; padding:10px 12px; border:1.5px solid #E6DCCB; border-radius:9px; font-size:14px; font-family:'Work Sans',sans-serif;"></textarea>
         </div>
         <div class="field">
+          <label>Search Keywords (#) — never shown on the catalogue, only helps customers find this category by search</label>
+          <textarea id="desc-grp-keywords" rows="2" placeholder="#wedding #bridal #giftforher #anniversary" style="width:100%; padding:10px 12px; border:1.5px solid #E6DCCB; border-radius:9px; font-size:14px; font-family:'Work Sans',sans-serif;"></textarea>
+          <p class="note" style="margin-top:4px;">Add words a customer might search for that aren't in the name itself — occasion, style, gift type, etc. These combine with whatever's added per-tag below, they don't replace it.</p>
+        </div>
+        <div class="field">
           <label>Size chart (customers can tap to view it)</label>
           <select id="desc-grp-sizechart-select">
             <option value="">No size chart linked</option>
@@ -840,6 +845,11 @@
           <div class="field">
             <label>Remarks / description</label>
             <textarea id="desc-tag-text" rows="3" style="width:100%; padding:10px 12px; border:1.5px solid #E6DCCB; border-radius:9px; font-size:14px; font-family:'Work Sans',sans-serif;"></textarea>
+          </div>
+          <div class="field">
+            <label>Search Keywords (#) — never shown on the catalogue, only helps customers find this exact tag by search</label>
+            <textarea id="desc-tag-keywords" rows="2" placeholder="#zodiac #birthday #minimal" style="width:100%; padding:10px 12px; border:1.5px solid #E6DCCB; border-radius:9px; font-size:14px; font-family:'Work Sans',sans-serif;"></textarea>
+            <p class="note" style="margin-top:4px;">Adds to the group's keywords above, doesn't replace them — both are searched together for this tag.</p>
           </div>
           <div class="field">
             <label>Size chart (customers can tap to view it)</label>
@@ -2739,6 +2749,7 @@ document.getElementById('desc-group-category-filter').addEventListener('change',
     document.getElementById('desc-grp-width').value = grp.width || '';
     document.getElementById('desc-grp-show-width').checked = !!grp.showWidth;
     document.getElementById('desc-grp-remarks').value = grp.groupRemarks || '';
+    document.getElementById('desc-grp-keywords').value = grp.keywords || '';
     await populateGroupSizeChartDropdown(grp.sizeChartId || '');
     await populateMergeIntoDropdown(key, grp.mergeInto || '');
     document.getElementById('desc-grp-hidden').checked = !!grp.hidden;
@@ -2836,7 +2847,7 @@ async function populateMergeIntoDropdown(excludeKey, selectedValue){
 // looking like they're still in effect.
 function applyMergeIntoFieldState(){
   const merging = !!document.getElementById('desc-grp-merge-into').value;
-  ['desc-grp-name-override', 'desc-category-label', 'desc-grp-show-weight', 'desc-grp-purity', 'desc-grp-width', 'desc-grp-show-width', 'desc-grp-remarks', 'desc-grp-sizechart-select', 'desc-grp-size-enabled'].forEach(id => {
+  ['desc-grp-name-override', 'desc-category-label', 'desc-grp-show-weight', 'desc-grp-purity', 'desc-grp-width', 'desc-grp-show-width', 'desc-grp-remarks', 'desc-grp-keywords', 'desc-grp-sizechart-select', 'desc-grp-size-enabled'].forEach(id => {
     document.getElementById(id).disabled = merging;
   });
   document.getElementById('desc-grp-size-options').style.pointerEvents = merging ? 'none' : 'auto';
@@ -2859,6 +2870,7 @@ document.getElementById('desc-grp-save-btn').addEventListener('click', async () 
   const width = document.getElementById('desc-grp-width').value.trim();
   const showWidth = document.getElementById('desc-grp-show-width').checked;
   const groupRemarks = document.getElementById('desc-grp-remarks').value.trim();
+  const keywords = document.getElementById('desc-grp-keywords').value.trim();
   const sizeChartId = document.getElementById('desc-grp-sizechart-select').value;
   const mergeInto = document.getElementById('desc-grp-merge-into').value;
   const hidden = document.getElementById('desc-grp-hidden').checked;
@@ -2872,7 +2884,7 @@ document.getElementById('desc-grp-save-btn').addEventListener('click', async () 
   statusEl.textContent = 'Saving group default…';
   try {
     await update(ref(db, '/'), {
-      ['catalogue/categorySettings/' + currentGroupEditKey]: { nameOverride, categoryLabel, showWeight, purity, width, showWidth, groupRemarks, sizeChartId, mergeInto: mergeInto || null, hidden, sizeSuffixEnabled, sizeSuffixMode, sizeSuffixCustomText }
+      ['catalogue/categorySettings/' + currentGroupEditKey]: { nameOverride, categoryLabel, showWeight, purity, width, showWidth, groupRemarks, keywords, sizeChartId, mergeInto: mergeInto || null, hidden, sizeSuffixEnabled, sizeSuffixMode, sizeSuffixCustomText }
     });
     statusEl.textContent = `Saved as the default for "${label}"!`;
     setTimeout(() => { statusEl.textContent = ''; }, 3000);
@@ -3063,6 +3075,7 @@ async function loadTagOverride(tag){
     document.getElementById('desc-tag-width').value = node.width || grp.width || '';
     document.getElementById('desc-tag-show-width').checked = (typeof node.showWidth === 'boolean') ? node.showWidth : !!grp.showWidth;
     document.getElementById('desc-tag-text').value = node.groupRemarks || desc.text || grp.groupRemarks || '';
+    document.getElementById('desc-tag-keywords').value = node.keywords || '';
     await populateTagSizeChartDropdown(node.sizeChartId || grp.sizeChartId || '');
     document.getElementById('desc-tag-scarcity-enabled').checked = desc.scarcityEnabled || false;
     document.getElementById('desc-tag-scarcity-count').value = desc.scarcityCount || '';
@@ -3119,6 +3132,7 @@ document.getElementById('desc-tag-save-btn').addEventListener('click', async () 
   const width = document.getElementById('desc-tag-width').value.trim();
   const showWidth = document.getElementById('desc-tag-show-width').checked;
   const groupRemarks = document.getElementById('desc-tag-text').value.trim();
+  const keywords = document.getElementById('desc-tag-keywords').value.trim();
   const sizeChartId = document.getElementById('desc-tag-sizechart-select').value;
   const scarcityEnabled = document.getElementById('desc-tag-scarcity-enabled').checked;
   const scarcityCount = scarcityEnabled ? (parseInt(document.getElementById('desc-tag-scarcity-count').value) || 0) : null;
@@ -3142,6 +3156,7 @@ document.getElementById('desc-tag-save-btn').addEventListener('click', async () 
       ['catalogue/items/' + currentDescTag + '/width']: width || null,
       ['catalogue/items/' + currentDescTag + '/showWidth']: showWidth,
       ['catalogue/items/' + currentDescTag + '/groupRemarks']: groupRemarks || null,
+      ['catalogue/items/' + currentDescTag + '/keywords']: keywords || null,
       ['catalogue/items/' + currentDescTag + '/sizeChartId']: sizeChartId || null,
       ['catalogue/items/' + currentDescTag + '/hidden']: hidden,
       ['catalogue/items/' + currentDescTag + '/hideFromHomeCategory']: hideFromHomeCategory,
@@ -3185,6 +3200,7 @@ async function deleteTagOverride(tag){
       ['catalogue/items/' + tag + '/width']: null,
       ['catalogue/items/' + tag + '/showWidth']: null,
       ['catalogue/items/' + tag + '/groupRemarks']: null,
+      ['catalogue/items/' + tag + '/keywords']: null,
       ['catalogue/items/' + tag + '/sizeChartId']: null,
       ['catalogue/items/' + tag + '/scarcityEnabled']: null, // clears any legacy scarcity remnant too
       ['catalogue/items/' + tag + '/scarcityCount']: null,
