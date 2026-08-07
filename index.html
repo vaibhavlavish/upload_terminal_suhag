@@ -264,6 +264,23 @@
   .home-add-preview .thumb img{width:100%; height:100%; object-fit:cover; display:block;}
   .home-add-preview .placeholder{font-size:11.5px; color:var(--ink-soft);}
   .section-label{ font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; color:var(--ink-soft); margin:0 0 8px; }
+  .form-accordion{ border:1.5px solid #E6DCCB; border-radius:10px; margin-bottom:14px; overflow:hidden; }
+  .form-accordion-header{
+    display:flex; align-items:center; justify-content:space-between; width:100%;
+    background:#FBF6EC; border:none; padding:12px 14px; cursor:pointer;
+    font-family:'Work Sans',sans-serif; font-size:13.5px; font-weight:700; color:var(--ink);
+  }
+  .form-accordion-chevron{ transition:transform .2s ease; color:var(--ink-soft); font-size:12px; }
+  .form-accordion-chevron.open{ transform:rotate(180deg); }
+  .form-accordion-body{ display:none; padding:14px; }
+  .form-accordion-body.open{ display:block; }
+  .field-row{ display:flex; align-items:center; gap:10px; margin-bottom:12px; }
+  .field-row .field{ flex:1; margin-bottom:0; }
+  .field-row label.inline-check{
+    display:flex; align-items:center; gap:6px; white-space:nowrap; font-size:12.5px;
+    font-weight:600; color:var(--ink-soft); cursor:pointer; padding-top:18px;
+  }
+  .field-row label.inline-check input{ width:auto; margin:0; }
 </style>
 </head>
 <body>
@@ -600,63 +617,90 @@
           <input type="text" id="desc-category-label" autocomplete="off" placeholder="Leave blank to show the category name as-is">
           <p class="note" style="margin-top:4px;">Only renames the chip text customers see — items still group under this category exactly the same either way.</p>
         </div>
-        <div class="field" style="display:flex; align-items:center; gap:8px;">
-          <input type="checkbox" id="desc-grp-show-weight" style="width:auto;">
-          <label for="desc-grp-show-weight" style="margin:0;">Show item weight on the catalogue</label>
-        </div>
-        <div class="field">
-          <label>Purity (e.g. 22K, 925)</label>
-          <input type="text" id="desc-grp-purity" autocomplete="off" placeholder="e.g. 22K">
-        </div>
-        <div class="field">
-          <label>Width (e.g. 8mm)</label>
-          <input type="text" id="desc-grp-width" autocomplete="off" placeholder="e.g. 8mm">
-          <p class="note" style="margin-top:4px;">Always usable to fill in the AI Enhance {{WIDTH}} placeholder, whether or not the checkbox below is on.</p>
-        </div>
-        <div class="field" style="display:flex; align-items:center; gap:8px;">
-          <input type="checkbox" id="desc-grp-show-width" style="width:auto;">
-          <label for="desc-grp-show-width" style="margin:0;">Show width on the catalogue</label>
-        </div>
-        <div class="field">
-          <label>Remarks (shown for every item in this category)</label>
-          <textarea id="desc-grp-remarks" rows="3" style="width:100%; padding:10px 12px; border:1.5px solid #E6DCCB; border-radius:9px; font-size:14px; font-family:'Work Sans',sans-serif;"></textarea>
-        </div>
-        <div class="field">
-          <label>Search Keywords (#) — never shown on the catalogue, only helps customers find this category by search</label>
-          <textarea id="desc-grp-keywords" rows="2" placeholder="#wedding #bridal #giftforher #anniversary" style="width:100%; padding:10px 12px; border:1.5px solid #E6DCCB; border-radius:9px; font-size:14px; font-family:'Work Sans',sans-serif;"></textarea>
-          <p class="note" style="margin-top:4px;">Add words a customer might search for that aren't in the name itself — occasion, style, gift type, etc. These combine with whatever's added per-tag below, they don't replace it.</p>
-        </div>
-        <div class="field">
-          <label>Size chart (customers can tap to view it)</label>
-          <select id="desc-grp-sizechart-select">
-            <option value="">No size chart linked</option>
-          </select>
-        </div>
-        <div class="field" style="display:flex; align-items:center; gap:8px;">
-          <input type="checkbox" id="desc-grp-size-enabled" style="width:auto;">
-          <label for="desc-grp-size-enabled" style="margin:0;">Display Size (turns the size line on for this category, e.g. "8 inch" — off means size doesn't show at all)</label>
-        </div>
-        <div id="desc-grp-size-options" style="display:none;">
-          <div class="toggle-row" style="margin:8px 0 10px;">
-            <div class="tab-btn active" id="desc-grp-size-mode-inch" style="font-size:12.5px; padding:8px 0;">Inch</div>
-            <div class="tab-btn" id="desc-grp-size-mode-cm" style="font-size:12.5px; padding:8px 0;">CM</div>
-            <div class="tab-btn" id="desc-grp-size-mode-custom" style="font-size:12.5px; padding:8px 0;">Custom</div>
+
+        <div class="form-accordion">
+          <button class="form-accordion-header" type="button" data-accordion="grp-physical">
+            <span>Physical Details — weight, purity, width, size</span>
+            <span class="form-accordion-chevron">▾</span>
+          </button>
+          <div class="form-accordion-body" id="grp-physical-body">
+            <div class="field" style="display:flex; align-items:center; gap:8px;">
+              <input type="checkbox" id="desc-grp-show-weight" style="width:auto;">
+              <label for="desc-grp-show-weight" style="margin:0;">Show item weight on the catalogue</label>
+            </div>
+            <div class="field">
+              <label>Purity (e.g. 22K, 925)</label>
+              <input type="text" id="desc-grp-purity" autocomplete="off" placeholder="e.g. 22K">
+            </div>
+            <div class="field-row">
+              <div class="field">
+                <label>Width (e.g. 8mm)</label>
+                <input type="text" id="desc-grp-width" autocomplete="off" placeholder="e.g. 8mm">
+              </div>
+              <label class="inline-check"><input type="checkbox" id="desc-grp-show-width"> Show</label>
+            </div>
+            <p class="note" style="margin-top:-6px;">Width is always usable to fill in the AI Enhance {{WIDTH}} placeholder, whether or not "Show" is checked.</p>
+            <div class="field">
+              <label>Size chart (customers can tap to view it)</label>
+              <select id="desc-grp-sizechart-select">
+                <option value="">No size chart linked</option>
+              </select>
+            </div>
+            <div class="field" style="display:flex; align-items:center; gap:8px;">
+              <input type="checkbox" id="desc-grp-size-enabled" style="width:auto;">
+              <label for="desc-grp-size-enabled" style="margin:0;">Display Size (turns the size line on for this category, e.g. "8 inch" — off means size doesn't show at all)</label>
+            </div>
+            <div id="desc-grp-size-options" style="display:none;">
+              <div class="toggle-row" style="margin:8px 0 10px;">
+                <div class="tab-btn active" id="desc-grp-size-mode-inch" style="font-size:12.5px; padding:8px 0;">Inch</div>
+                <div class="tab-btn" id="desc-grp-size-mode-cm" style="font-size:12.5px; padding:8px 0;">CM</div>
+                <div class="tab-btn" id="desc-grp-size-mode-custom" style="font-size:12.5px; padding:8px 0;">Custom</div>
+              </div>
+              <div id="desc-grp-size-custom-field" style="display:none;">
+                <input type="text" id="desc-grp-size-custom-text" autocomplete="off" placeholder="e.g. mm, ft, free size…">
+              </div>
+            </div>
           </div>
-          <div id="desc-grp-size-custom-field" style="display:none;">
-            <input type="text" id="desc-grp-size-custom-text" autocomplete="off" placeholder="e.g. mm, ft, free size…">
+        </div>
+
+        <div class="form-accordion">
+          <button class="form-accordion-header" type="button" data-accordion="grp-marketing">
+            <span>Marketing &amp; Search — remarks, keywords</span>
+            <span class="form-accordion-chevron">▾</span>
+          </button>
+          <div class="form-accordion-body" id="grp-marketing-body">
+            <div class="field">
+              <label>Remarks (shown for every item in this category)</label>
+              <textarea id="desc-grp-remarks" rows="3" style="width:100%; padding:10px 12px; border:1.5px solid #E6DCCB; border-radius:9px; font-size:14px; font-family:'Work Sans',sans-serif;"></textarea>
+            </div>
+            <div class="field">
+              <label>Search Keywords (#) — never shown on the catalogue, only helps customers find this category by search</label>
+              <textarea id="desc-grp-keywords" rows="2" placeholder="#wedding #bridal #giftforher #anniversary" style="width:100%; padding:10px 12px; border:1.5px solid #E6DCCB; border-radius:9px; font-size:14px; font-family:'Work Sans',sans-serif;"></textarea>
+              <p class="note" style="margin-top:4px;">Add words a customer might search for that aren't in the name itself — occasion, style, gift type, etc. These combine with whatever's added per-tag below, they don't replace it.</p>
+            </div>
           </div>
         </div>
-        <div class="field">
-          <label>Merge into another category (optional)</label>
-          <select id="desc-grp-merge-into">
-            <option value="">— Don't merge — keep as its own category —</option>
-          </select>
-          <p class="note" style="margin-top:4px;">Combines this category's items into the target category on the catalogue — same chip, same defaults, automatically including items added to either later. Once merged, this category's own name/weight/purity/remarks/size chart above are ignored — edit those on the target category instead.</p>
+
+        <div class="form-accordion">
+          <button class="form-accordion-header" type="button" data-accordion="grp-visibility">
+            <span>Visibility &amp; Merge</span>
+            <span class="form-accordion-chevron">▾</span>
+          </button>
+          <div class="form-accordion-body" id="grp-visibility-body">
+            <div class="field">
+              <label>Merge into another category (optional)</label>
+              <select id="desc-grp-merge-into">
+                <option value="">— Don't merge — keep as its own category —</option>
+              </select>
+              <p class="note" style="margin-top:4px;">Combines this category's items into the target category on the catalogue — same chip, same defaults, automatically including items added to either later. Once merged, this category's own name/weight/purity/remarks/size chart above are ignored — edit those on the target category instead.</p>
+            </div>
+            <div class="field" style="display:flex; align-items:center; gap:8px;">
+              <input type="checkbox" id="desc-grp-hidden" style="width:auto;">
+              <label for="desc-grp-hidden" style="margin:0;">Hide this entire category from the catalogue completely</label>
+            </div>
+          </div>
         </div>
-        <div class="field" style="display:flex; align-items:center; gap:8px;">
-          <input type="checkbox" id="desc-grp-hidden" style="width:auto;">
-          <label for="desc-grp-hidden" style="margin:0;">Hide this entire category from the catalogue completely</label>
-        </div>
+
         <button class="btn" id="desc-grp-save-btn">Save Group Defaults</button>
         <p class="link-status" id="desc-grp-save-status"></p>
       </div>
@@ -825,69 +869,96 @@
             <label>Display name on catalogue</label>
             <input type="text" id="desc-tag-name" autocomplete="off" placeholder="Leave blank to use the group's item name">
           </div>
-          <div class="field" style="display:flex; align-items:center; gap:8px;">
-            <input type="checkbox" id="desc-tag-show-weight" style="width:auto;">
-            <label for="desc-tag-show-weight" style="margin:0;">Show weight on the catalogue</label>
-          </div>
-          <div class="field">
-            <label>Purity (e.g. 22K, 925)</label>
-            <input type="text" id="desc-tag-purity" autocomplete="off" placeholder="Leave blank to use the group's purity">
-          </div>
-          <div class="field">
-            <label>Width (e.g. 8mm)</label>
-            <input type="text" id="desc-tag-width" autocomplete="off" placeholder="Leave blank to use the group's width">
-            <p class="note" style="margin-top:4px;">Always usable to fill in the AI Enhance {{WIDTH}} placeholder, whether or not the checkbox below is on.</p>
-          </div>
-          <div class="field" style="display:flex; align-items:center; gap:8px;">
-            <input type="checkbox" id="desc-tag-show-width" style="width:auto;">
-            <label for="desc-tag-show-width" style="margin:0;">Show width on the catalogue</label>
-          </div>
-          <div class="field">
-            <label>Remarks / description</label>
-            <textarea id="desc-tag-text" rows="3" style="width:100%; padding:10px 12px; border:1.5px solid #E6DCCB; border-radius:9px; font-size:14px; font-family:'Work Sans',sans-serif;"></textarea>
-          </div>
-          <div class="field">
-            <label>Search Keywords (#) — never shown on the catalogue, only helps customers find this exact tag by search</label>
-            <textarea id="desc-tag-keywords" rows="2" placeholder="#zodiac #birthday #minimal" style="width:100%; padding:10px 12px; border:1.5px solid #E6DCCB; border-radius:9px; font-size:14px; font-family:'Work Sans',sans-serif;"></textarea>
-            <p class="note" style="margin-top:4px;">Adds to the group's keywords above, doesn't replace them — both are searched together for this tag.</p>
-          </div>
-          <div class="field">
-            <label>Size chart (customers can tap to view it)</label>
-            <select id="desc-tag-sizechart-select">
-              <option value="">No size chart linked</option>
-            </select>
-          </div>
-          <div id="desc-tag-size-section" style="display:none;">
-            <p class="note" style="margin-top:14px; margin-bottom:6px; font-weight:700;">Display Size</p>
-            <div class="toggle-row" style="margin:0 0 10px;">
-              <div class="tab-btn" id="desc-tag-size-mode-inch" style="font-size:12.5px; padding:8px 0;">Inch</div>
-              <div class="tab-btn" id="desc-tag-size-mode-cm" style="font-size:12.5px; padding:8px 0;">CM</div>
-              <div class="tab-btn" id="desc-tag-size-mode-custom" style="font-size:12.5px; padding:8px 0;">Custom</div>
+
+          <div class="form-accordion">
+            <button class="form-accordion-header" type="button" data-accordion="tag-physical">
+              <span>Physical Details — weight, purity, width, size</span>
+              <span class="form-accordion-chevron">▾</span>
+            </button>
+            <div class="form-accordion-body" id="tag-physical-body">
+              <div class="field" style="display:flex; align-items:center; gap:8px;">
+                <input type="checkbox" id="desc-tag-show-weight" style="width:auto;">
+                <label for="desc-tag-show-weight" style="margin:0;">Show weight on the catalogue</label>
+              </div>
+              <div class="field">
+                <label>Purity (e.g. 22K, 925)</label>
+                <input type="text" id="desc-tag-purity" autocomplete="off" placeholder="Leave blank to use the group's purity">
+              </div>
+              <div class="field-row">
+                <div class="field">
+                  <label>Width (e.g. 8mm)</label>
+                  <input type="text" id="desc-tag-width" autocomplete="off" placeholder="Leave blank to use the group's width">
+                </div>
+                <label class="inline-check"><input type="checkbox" id="desc-tag-show-width"> Show</label>
+              </div>
+              <p class="note" style="margin-top:-6px;">Width is always usable to fill in the AI Enhance {{WIDTH}} placeholder, whether or not "Show" is checked.</p>
+              <div class="field">
+                <label>Size chart (customers can tap to view it)</label>
+                <select id="desc-tag-sizechart-select">
+                  <option value="">No size chart linked</option>
+                </select>
+              </div>
+              <div id="desc-tag-size-section" style="display:none;">
+                <p class="note" style="margin-top:14px; margin-bottom:6px; font-weight:700;">Display Size</p>
+                <div class="toggle-row" style="margin:0 0 10px;">
+                  <div class="tab-btn" id="desc-tag-size-mode-inch" style="font-size:12.5px; padding:8px 0;">Inch</div>
+                  <div class="tab-btn" id="desc-tag-size-mode-cm" style="font-size:12.5px; padding:8px 0;">CM</div>
+                  <div class="tab-btn" id="desc-tag-size-mode-custom" style="font-size:12.5px; padding:8px 0;">Custom</div>
+                </div>
+                <div id="desc-tag-size-custom-field" style="display:none;">
+                  <input type="text" id="desc-tag-size-custom-text" autocomplete="off" placeholder="e.g. mm, ft, free size…">
+                </div>
+                <div class="field" style="display:flex; align-items:center; gap:8px; margin-top:10px;">
+                  <input type="checkbox" id="desc-tag-size-hide" style="width:auto;">
+                  <label for="desc-tag-size-hide" style="margin:0;">Hide size for this tag (even though the group shows it)</label>
+                </div>
+              </div>
             </div>
-            <div id="desc-tag-size-custom-field" style="display:none;">
-              <input type="text" id="desc-tag-size-custom-text" autocomplete="off" placeholder="e.g. mm, ft, free size…">
+          </div>
+
+          <div class="form-accordion">
+            <button class="form-accordion-header" type="button" data-accordion="tag-marketing">
+              <span>Marketing &amp; Search — remarks, keywords</span>
+              <span class="form-accordion-chevron">▾</span>
+            </button>
+            <div class="form-accordion-body" id="tag-marketing-body">
+              <div class="field">
+                <label>Remarks / description</label>
+                <textarea id="desc-tag-text" rows="3" style="width:100%; padding:10px 12px; border:1.5px solid #E6DCCB; border-radius:9px; font-size:14px; font-family:'Work Sans',sans-serif;"></textarea>
+              </div>
+              <div class="field">
+                <label>Search Keywords (#) — never shown on the catalogue, only helps customers find this exact tag by search</label>
+                <textarea id="desc-tag-keywords" rows="2" placeholder="#zodiac #birthday #minimal" style="width:100%; padding:10px 12px; border:1.5px solid #E6DCCB; border-radius:9px; font-size:14px; font-family:'Work Sans',sans-serif;"></textarea>
+                <p class="note" style="margin-top:4px;">Adds to the group's keywords above, doesn't replace them — both are searched together for this tag.</p>
+              </div>
             </div>
-            <div class="field" style="display:flex; align-items:center; gap:8px; margin-top:10px;">
-              <input type="checkbox" id="desc-tag-size-hide" style="width:auto;">
-              <label for="desc-tag-size-hide" style="margin:0;">Hide size for this tag (even though the group shows it)</label>
+          </div>
+
+          <div class="form-accordion">
+            <button class="form-accordion-header" type="button" data-accordion="tag-visibility">
+              <span>Scarcity &amp; Visibility</span>
+              <span class="form-accordion-chevron">▾</span>
+            </button>
+            <div class="form-accordion-body" id="tag-visibility-body">
+              <div class="field" style="display:flex; align-items:center; gap:8px;">
+                <input type="checkbox" id="desc-tag-scarcity-enabled" style="width:auto;">
+                <label for="desc-tag-scarcity-enabled" style="margin:0;">Show an "Only X Left" badge on the catalogue</label>
+              </div>
+              <div class="field" id="desc-tag-scarcity-field" style="display:none;">
+                <label>Number to show (your own call — not tied to actual stock count)</label>
+                <input type="number" id="desc-tag-scarcity-count" min="1" step="1" placeholder="e.g. 2">
+              </div>
+              <div class="field" style="display:flex; align-items:center; gap:8px; margin-top:14px;">
+                <input type="checkbox" id="desc-tag-hidden" style="width:auto;">
+                <label for="desc-tag-hidden" style="margin:0;">Hide this item from the catalogue completely</label>
+              </div>
+              <div class="field" id="desc-tag-hide-home-field" style="display:flex; align-items:center; gap:8px;">
+                <input type="checkbox" id="desc-tag-hide-home" style="width:auto;">
+                <label for="desc-tag-hide-home" style="margin:0;">Hide only from its home category (still shows in "All" and in any custom category)</label>
+              </div>
             </div>
           </div>
-          <div class="field" style="display:flex; align-items:center; gap:8px; margin-top:14px;">
-            <input type="checkbox" id="desc-tag-scarcity-enabled" style="width:auto;">
-            <label for="desc-tag-scarcity-enabled" style="margin:0;">Show an "Only X Left" badge on the catalogue</label>
-          </div>
-          <div class="field" id="desc-tag-scarcity-field" style="display:none;">
-            <label>Number to show (your own call — not tied to actual stock count)</label>
-            <input type="number" id="desc-tag-scarcity-count" min="1" step="1" placeholder="e.g. 2">
-          </div>
-          <div class="field" style="display:flex; align-items:center; gap:8px; margin-top:14px;">
-            <input type="checkbox" id="desc-tag-hidden" style="width:auto;">
-            <label for="desc-tag-hidden" style="margin:0;">Hide this item from the catalogue completely</label>
-          </div>
-          <div class="field" id="desc-tag-hide-home-field" style="display:flex; align-items:center; gap:8px;">
-            <input type="checkbox" id="desc-tag-hide-home" style="width:auto;">
-            <label for="desc-tag-hide-home" style="margin:0;">Hide only from its home category (still shows in "All" and in any custom category)</label>
-          </div>
+
           <button class="btn" id="desc-tag-save-btn">Save Tag-Specific</button>
           <button class="btn secondary" id="desc-tag-clear-btn" type="button" style="margin-top:8px;">Clear Override (Back to Group Default)</button>
           <p class="link-status" id="desc-tag-save-status"></p>
@@ -2771,6 +2842,13 @@ document.getElementById('desc-group-category-filter').addEventListener('change',
     document.getElementById('desc-grp-size-custom-field').style.display = grp.sizeSuffixMode === 'custom' ? 'block' : 'none';
     document.getElementById('desc-grp-size-custom-text').value = grp.sizeSuffixCustomText || '';
     applyMergeIntoFieldState();
+    // Each section opens automatically if it already has something set for
+    // this category — an empty section stays collapsed, so a shopkeeper
+    // scanning a plain, untouched category isn't scrolling past a dozen
+    // fields that don't apply to it.
+    setAccordionOpen('grp-physical-body', !!(grp.purity || grp.width || grp.sizeChartId || grp.sizeSuffixEnabled || grp.showWeight));
+    setAccordionOpen('grp-marketing-body', !!(grp.groupRemarks || grp.keywords));
+    setAccordionOpen('grp-visibility-body', !!(grp.mergeInto || grp.hidden));
     if (myToken !== groupEditRequestToken) return; // check again — populateGroupSizeChartDropdown/populateMergeIntoDropdown are also async
 
     statusEl.textContent = `${matches.length} item${matches.length === 1 ? '' : 's'} currently in "${homeCategoryLabel(key)}".`;
@@ -2807,6 +2885,30 @@ function getSizeMode(prefix){
 }
 
 wireSizeModeButtons('desc-grp-size-mode-', 'desc-grp-size-custom-field');
+
+// Generic accordion toggle — every .form-accordion-header on the page
+// (Group Defaults and Tag-Specific both use these), wired once since the
+// markup is static, not re-rendered per open like Tag Manage's own list.
+document.querySelectorAll('.form-accordion-header').forEach(header => {
+  header.addEventListener('click', () => {
+    const body = header.nextElementSibling;
+    const chevron = header.querySelector('.form-accordion-chevron');
+    const nowOpen = !body.classList.contains('open');
+    body.classList.toggle('open', nowOpen);
+    chevron.classList.toggle('open', nowOpen);
+  });
+});
+// Opens (or closes) one accordion section by its body id — used to
+// auto-expand a section that already has data set, so existing
+// overrides are never hidden by default, only genuinely-empty sections are.
+function setAccordionOpen(bodyId, open){
+  const body = document.getElementById(bodyId);
+  if (!body) return;
+  body.classList.toggle('open', open);
+  const header = body.previousElementSibling;
+  const chevron = header && header.querySelector('.form-accordion-chevron');
+  if (chevron) chevron.classList.toggle('open', open);
+}
 document.getElementById('desc-grp-size-enabled').addEventListener('change', () => {
   document.getElementById('desc-grp-size-options').style.display =
     document.getElementById('desc-grp-size-enabled').checked ? 'block' : 'none';
@@ -3110,6 +3212,13 @@ async function loadTagOverride(tag){
     } else {
       sizeSection.style.display = 'none';
     }
+    // Opens automatically if the section would show something meaningful
+    // (a tag-level override OR an inherited group value) — a genuinely
+    // untouched section stays collapsed, so working through a batch of
+    // plain items doesn't mean scrolling past a dozen empty fields each time.
+    setAccordionOpen('tag-physical-body', !!(node.purity || grp.purity || node.width || grp.width || node.sizeChartId || grp.sizeChartId || grp.sizeSuffixEnabled));
+    setAccordionOpen('tag-marketing-body', !!(node.groupRemarks || desc.text || grp.groupRemarks || node.keywords));
+    setAccordionOpen('tag-visibility-body', !!(desc.scarcityEnabled || node.hidden || node.hideFromHomeCategory));
     if (myToken !== tagEditRequestToken) return;
 
     // Reference line: shows where the pre-filled values above came from —
