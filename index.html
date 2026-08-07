@@ -1197,24 +1197,36 @@ async function uploadForBarcode(barcode, fullCanvas){
     thumbUrl, thumbStoragePath,
     uploadedAt: Date.now(),
   };
-  // The POS's own sync (both availability AND displayName) only updates
-  // barcodes that already have a catalogue entry, and only runs after a
-  // sale/return/rate-change/import — so a brand-new entry (this upload may
-  // be creating one right now) would otherwise sit shown as "sold out" AND
-  // ungrouped/uncategorised (no displayName means it can't be matched into
-  // its category) until the next one of those events happens anywhere in
-  // the shop. checkBarcodeInStock already confirmed this barcode is in
-  // stock immediately before capture, so it's safe to set both right here
-  // instead of waiting on that next event — this also keeps displayName
-  // freshly in sync with the POS on every upload, not just the first.
+  // The POS's own sync (availability, displayName, size, weight) only
+  // updates barcodes that already have a catalogue entry, and only runs
+  // after a sale/return/rate-change/import — so a brand-new entry (this
+  // upload may be creating one right now) would otherwise sit shown as
+  // "sold out", ungrouped/uncategorised (no displayName), with no size or
+  // weight, until the next one of those events happens anywhere in the
+  // shop. checkBarcodeInStock already confirmed this barcode is in stock
+  // immediately before capture, so it's safe to set these right here
+  // instead of waiting on that next event — this also keeps them freshly
+  // in sync with the POS on every upload, not just the first.
   updates['catalogue/items/' + barcode + '/available'] = true;
   try {
     const prodSnap = await get(ref(db, 'jewelryData/products/' + barcode));
-    const rawName = (prodSnap.val() && prodSnap.val().itemName || '').trim();
+    const d = prodSnap.val();
+    const rawName = (d && d.itemName || '').trim();
     if (rawName) updates['catalogue/items/' + barcode + '/displayName'] = rawName;
+    // Same gap as displayName above, just for two more fields the POS sync
+    // also owns — a brand-new item would otherwise show no size (breaking
+    // the Display Size feature) and no weight (breaking both the weight
+    // line and the weight sort) until that next POS-side event. Price is
+    // deliberately NOT included here: the POS's real pricing calculation
+    // (current rates, making charges, per-tag overrides) isn't available
+    // in this tool, and a wrong price would be worse than a temporarily
+    // blank "Price on request" — that one field still only updates via the
+    // POS's own sync, same as before this fix.
+    if (d && d.size) updates['catalogue/items/' + barcode + '/displaySize'] = d.size;
+    if (d && typeof d.netWeight === 'number' && d.netWeight > 0) updates['catalogue/items/' + barcode + '/displayWeight'] = d.netWeight;
   } catch (e) {
-    console.error('[upload] could not read POS name for ' + barcode, e);
-    // Not fatal — available still gets set below, just without a fresh name this time.
+    console.error('[upload] could not read POS name/size/weight for ' + barcode, e);
+    // Not fatal — available still gets set below, just without fresh values this time.
   }
   await update(ref(db, '/'), updates);
   return { imageId, storagePath, thumbStoragePath };
