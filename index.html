@@ -952,6 +952,7 @@
                 <input type="checkbox" id="desc-tag-hidden" style="width:auto;">
                 <label for="desc-tag-hidden" style="margin:0;">Hide this item from the catalogue completely</label>
               </div>
+              <p class="note" id="desc-tag-installment-note" style="display:none; margin-top:4px; color:#B5442E;"></p>
               <div class="field" id="desc-tag-hide-home-field" style="display:flex; align-items:center; gap:8px;">
                 <input type="checkbox" id="desc-tag-hide-home" style="width:auto;">
                 <label for="desc-tag-hide-home" style="margin:0;">Hide only from its home category (still shows in "All" and in any custom category)</label>
@@ -3152,10 +3153,11 @@ async function loadTagOverride(tag){
   const myToken = ++tagEditRequestToken;
   statusEl.textContent = 'Loading…';
   try {
-    const [itemSnap, descSnap, productSnap] = await Promise.all([
+    const [itemSnap, descSnap, productSnap, installmentsSnap] = await Promise.all([
       get(ref(db, 'catalogue/items/' + barcode)),
       get(ref(db, 'catalogue/tagDescriptions/' + barcode)),
       get(ref(db, 'jewelryData/products/' + barcode)),
+      get(ref(db, 'installments')),
     ]);
     if (myToken !== tagEditRequestToken) return; // a newer load started while this was in flight
 
@@ -3194,7 +3196,30 @@ async function loadTagOverride(tag){
     document.getElementById('desc-tag-scarcity-enabled').checked = desc.scarcityEnabled || false;
     document.getElementById('desc-tag-scarcity-count').value = desc.scarcityCount || '';
     document.getElementById('desc-tag-scarcity-field').style.display = desc.scarcityEnabled ? 'block' : 'none';
-    document.getElementById('desc-tag-hidden').checked = !!node.hidden;
+    // POS can also hide an item for a reason this tool has no other record
+    // of — it's sitting in an active installment plan, pending payment.
+    // Unchecking this here would put it back on the catalogue while it's
+    // still supposed to be held, so the checkbox is disabled and explained
+    // instead of just quietly showing checked with no context. The plan
+    // itself (cancel it, in POS) is the correct way to release the hold —
+    // not this checkbox.
+    const installmentsVal = installmentsSnap.val() || {};
+    const holdingPlan = Object.values(installmentsVal).find(p =>
+      p && p.status === 'active' && Array.isArray(p.items) &&
+      p.items.some(i => i && i.barcode && String(i.barcode).trim().toUpperCase() === barcode)
+    );
+    const hiddenCheckbox = document.getElementById('desc-tag-hidden');
+    const installmentNote = document.getElementById('desc-tag-installment-note');
+    if (holdingPlan) {
+      hiddenCheckbox.checked = true;
+      hiddenCheckbox.disabled = true;
+      installmentNote.textContent = `🔒 Hidden because it's in an active installment plan for ${holdingPlan.customerName || 'a customer'} — cancel that plan in POS to release it, not this checkbox.`;
+      installmentNote.style.display = 'block';
+    } else {
+      hiddenCheckbox.disabled = false;
+      installmentNote.style.display = 'none';
+      hiddenCheckbox.checked = !!node.hidden;
+    }
     document.getElementById('desc-tag-hide-home').checked = !!node.hideFromHomeCategory;
     document.getElementById('desc-tag-hide-home').disabled = !!node.hidden;
     document.getElementById('desc-tag-hide-home-field').style.opacity = node.hidden ? '0.5' : '1';
